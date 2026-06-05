@@ -408,20 +408,16 @@ These labels provide full supply chain traceability for every image.
 
 ## Initial Setup
 
-To initialize the `versions` branch on a new repository:
+The `versions` orphan branch has been initialized with `versions.yaml` tracking all chart majors.
+
+To view or modify:
 
 ```bash
-# Run setup script
-./scripts/setup-versions-branch.sh
-
-# Push the orphan branch
-git push origin versions
-
-# Return to main
+git checkout versions
+cat versions.yaml
+# Make changes if needed
 git checkout main
 ```
-
-The script creates `versions.yaml` with entries for all chart majors defined in `config.yaml`.
 
 ## Summary
 
