@@ -14,7 +14,7 @@ SOURCE_REPO ?= rancher/rancher-assets
 IMAGE_REPO ?= $(REGISTRY)/$(ORG)/$(REPO)
 TARGET_PLATFORMS ?= linux/amd64,linux/arm64
 
-.PHONY: help generate verify build build-all build-release push-image push-all vendor-update
+.PHONY: help generate verify build build-all build-release push-image push-all vendor-update release-auto release-manual
 
 help: ## Show this help message
 	@echo "Rancher Assets Build System"
@@ -29,6 +29,8 @@ help: ## Show this help message
 	@echo "  make build-all              # Dev builds with auto-generated versions"
 	@echo "  make push-all               # Build and push all to registry"
 	@echo "  make build-release          # Local debug - builds latest-stable from lock.yaml"
+	@echo "  make release-auto           # Create auto pre-release tags"
+	@echo "  make release-manual BUMP=minor RELEASE=prerelease"
 	@echo ""
 	@echo "Fork-friendly overrides:"
 	@echo "  make push-all REGISTRY=ghcr.io ORG=myorg REPO=my-charts SOURCE_REPO=myorg/rancher-assets"
@@ -314,3 +316,24 @@ build-release: ## Build release versions from lock.yaml (LOCAL DEBUG ONLY - use 
 .PHONY: test
 test: ## Run tests
 	@go test -v ./...
+
+release-auto: ## Create auto pre-release tags based on lock.yaml changes
+	@./scripts/create-auto-prerelease.sh
+
+release-manual: ## Create manual release tags (usage: make release-manual BUMP=minor RELEASE=prerelease [MAJOR=v0])
+	@if [ -z "$(BUMP)" ] || [ -z "$(RELEASE)" ]; then \
+		echo "❌ Error: BUMP and RELEASE required"; \
+		echo ""; \
+		echo "Usage:"; \
+		echo "  make release-manual BUMP=minor RELEASE=prerelease"; \
+		echo "  make release-manual BUMP=patch RELEASE=stable MAJOR=v0"; \
+		exit 1; \
+	fi
+	@ARGS="--bump=$(BUMP) --release=$(RELEASE)"; \
+	if [ -n "$(MAJOR)" ]; then \
+		ARGS="$$ARGS --major=$(MAJOR)"; \
+	fi; \
+	if [ -n "$(COMMIT)" ]; then \
+		ARGS="$$ARGS --commit=$(COMMIT)"; \
+	fi; \
+	./scripts/create-manual-release.sh $$ARGS
