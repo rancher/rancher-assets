@@ -96,7 +96,7 @@ jobs:
           RELEASE_PLAN="["
           FIRST=true
 
-          echo '${{ steps.setup.outputs.chart_majors }}' | jq -r '.[]' | while read -r MAJOR; do
+          while read -r MAJOR; do
             echo "Planning release for $MAJOR..."
 
             # Get current versions
@@ -177,7 +177,7 @@ jobs:
             FIRST=false
 
             RELEASE_PLAN="${RELEASE_PLAN}{\"major\":\"${MAJOR}\",\"current_stable\":\"${CURRENT_STABLE}\",\"current_prerelease\":\"${CURRENT_PRERELEASE}\",\"new_version\":\"${NEW_VERSION}\",\"is_rc_bump\":false}"
-          done
+          done < <(echo '${{ steps.setup.outputs.chart_majors }}' | jq -r '.[]')
 
           RELEASE_PLAN="${RELEASE_PLAN}]"
           echo "release_plan=$RELEASE_PLAN" >> $GITHUB_OUTPUT
