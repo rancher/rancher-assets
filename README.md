@@ -25,7 +25,7 @@ Use as an init container to copy charts to a shared volume:
 ```yaml
 initContainers:
   - name: charts-copy
-    image: rancher/rancher-charts:v1.0.0
+    image: ghcr.io/rancher/rancher-assets:v1.0.0
     volumeMounts:
       - name: charts
         mountPath: /charts

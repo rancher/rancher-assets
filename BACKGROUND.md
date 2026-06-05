@@ -4,7 +4,7 @@ This document explains the architecture and design decisions for the rancher-ass
 
 ## Problem Statement
 
-The `rancher-charts` image needs to bundle Helm charts from multiple upstream repositories for air-gapped Rancher deployments. Building this inside `rancher/rancher` would create a circular dependency problem:
+The `rancher-assets` image needs to bundle Helm charts from multiple upstream repositories for air-gapped Rancher deployments. Building this inside `rancher/rancher` would create a circular dependency problem:
 - Rancher would consume the charts image as a dependency
 - Rancher would also build the charts image
 - This chicken-and-egg problem would complicate versioning and releases
@@ -181,7 +181,7 @@ io.rancher.rke2.commit=${RKE2_COMMIT}         # RKE2 commit SHA
 
 **Inspecting labels:**
 ```bash
-docker inspect rancher/rancher-charts:v1.0.0 | jq '.[0].Config.Labels'
+docker inspect ghcr.io/rancher/rancher-assets:v1.0.0 | jq '.[0].Config.Labels'
 ```
 
 ## Configuration Files
@@ -247,7 +247,7 @@ The images are designed to run as init containers in Rancher:
 ```yaml
 initContainers:
   - name: charts-copy
-    image: rancher/rancher-charts:v1.0.0
+    image: ghcr.io/rancher/rancher-assets:v1.0.0
     volumeMounts:
       - name: charts
         mountPath: /charts
@@ -332,9 +332,9 @@ make push-all \
 ```
 
 **Defaults:**
-- `REGISTRY=docker.io`
+- `REGISTRY=ghcr.io`
 - `ORG=rancher`
-- `REPO=rancher-charts`
+- `REPO=rancher-assets`
 - `SOURCE_REPO=rancher/rancher-assets`
 
 **Why:**

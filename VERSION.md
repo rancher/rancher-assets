@@ -278,7 +278,7 @@ Reads lock.yaml from tagged commit
 Builds using prod refs (clean semver)
   ↓
 Pushes multi-arch image:
-  - docker.io/rancher/rancher-charts:v1.0.0 (linux/amd64, linux/arm64)
+  - ghcr.io/rancher/rancher-assets:v1.0.0 (linux/amd64, linux/arm64)
   ↓
 Creates GitHub Release
   ↓
@@ -304,8 +304,8 @@ git commit -m "Bump BCI to fix CVE"
 # - Builds images
 
 # 4. Images available for testing
-# docker.io/rancher/rancher-charts:v0.1.0-rc.4
-# docker.io/rancher/rancher-charts:v1.2.0-rc.2
+# ghcr.io/rancher/rancher-assets:v0.1.0-rc.4
+# ghcr.io/rancher/rancher-assets:v1.2.0-rc.2
 ```
 
 ### Stable Release Flow

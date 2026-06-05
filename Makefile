@@ -6,9 +6,9 @@ VERSION ?=
 CHART_MAJOR ?=
 
 # Fork-friendly configuration - override these for your fork
-REGISTRY ?= docker.io
+REGISTRY ?= ghcr.io
 ORG ?= rancher
-REPO ?= rancher-charts
+REPO ?= rancher-assets
 SOURCE_REPO ?= rancher/rancher-assets
 IMAGE_REPO ?= $(REGISTRY)/$(ORG)/$(REPO)
 TARGET_PLATFORMS ?= linux/amd64,linux/arm64

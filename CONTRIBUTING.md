@@ -136,7 +136,7 @@ make build-all
 **Test the init container:**
 ```bash
 docker run --rm -v /tmp/charts-test:/charts \
-  rancher/rancher-charts:v1.0.0-rc.1
+  ghcr.io/rancher/rancher-assets:v1.0.0-rc.1
 
 # Verify charts copied
 ls /tmp/charts-test/
@@ -179,7 +179,7 @@ make build-all
 ```bash
 # Run the image to copy charts
 docker run --rm -v /tmp/charts-test:/charts \
-  rancher/rancher-charts:v1.0.0-rc.1
+  ghcr.io/rancher/rancher-assets:v1.0.0-rc.1
 
 # Verify charts are present
 ls -lah /tmp/charts-test/rancher-charts/
@@ -187,7 +187,7 @@ ls -lah /tmp/charts-test/rancher-partner-charts/
 ls -lah /tmp/charts-test/rancher-rke2-charts/
 
 # Check metadata
-docker inspect rancher/rancher-charts:v1.0.0-rc.1 | jq '.[0].Config.Labels'
+docker inspect ghcr.io/rancher/rancher-assets:v1.0.0-rc.1 | jq '.[0].Config.Labels'
 ```
 
 ### Change Detection Testing

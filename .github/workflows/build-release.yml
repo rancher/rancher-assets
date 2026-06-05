@@ -10,9 +10,8 @@ permissions:
   packages: write
 
 env:
-  REGISTRY: docker.io
-  ORG: rancher
-  REPO: rancher-charts
+  REGISTRY: ghcr.io
+  REPO: rancher-assets
 
 jobs:
   parse-tag:
@@ -52,24 +51,28 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to Docker Hub
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
         run: |
           make build \
+            REGISTRY=${{ env.REGISTRY }} \
+            ORG=${{ github.repository_owner }} \
+            REPO=${{ env.REPO }} \
             CHART_MAJOR=${{ needs.parse-tag.outputs.major }} \
             VERSION=${{ needs.parse-tag.outputs.version }} \
             TARGET_PLATFORMS=linux/amd64,linux/arm64
 
-          docker push "${REGISTRY}/${ORG}/${REPO}:${{ needs.parse-tag.outputs.version }}"
+          docker push "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${{ needs.parse-tag.outputs.version }}"
 
       - name: Generate image metadata
         run: |
-          docker inspect "${REGISTRY}/${ORG}/${REPO}:${{ needs.parse-tag.outputs.version }}" \
+          docker inspect "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${{ needs.parse-tag.outputs.version }}" \
             --format='{{json .Config.Labels}}' | jq . > image-labels.json
 
       - name: Upload image metadata
@@ -99,18 +102,18 @@ jobs:
 
           gh pr create --repo rancher/rancher \
             --base ${{ steps.rancher.outputs.branch }} \
-            --title "Update to rancher-charts ${VERSION}" \
-            --body "## Rancher Charts Update
+            --title "Update to rancher-assets ${VERSION}" \
+            --body "## Rancher Assets Update
 
 **Version**: \`${VERSION}\`
 **Chart Major**: \`${{ needs.parse-tag.outputs.major }}\`
-**Image**: \`${REGISTRY}/${ORG}/${REPO}:${VERSION}\`
+**Image**: \`${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${VERSION}\`
 
 ### Changes
-This updates the rancher-charts image to ${VERSION}.
+This updates the rancher-assets image to ${VERSION}.
 
 ### Updates Required
-- [ ] Update \`build.yaml\`: \`defaultChartsImage: ${REGISTRY}/${ORG}/${REPO}:${VERSION}\`
+- [ ] Update \`build.yaml\`: \`defaultChartsImage: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${VERSION}\`
 - [ ] Run \`go generate\` to update chart values
 
 🤖 Automated PR from rancher-assets release workflow"
@@ -137,10 +140,10 @@ This updates the rancher-charts image to ${VERSION}.
           BUILD_TYPE="${{ needs.parse-tag.outputs.build_type }}"
 
           if [ "$BUILD_TYPE" = "prod" ]; then
-            RELEASE_NAME="Rancher Charts ${VERSION}"
+            RELEASE_NAME="Rancher Assets ${VERSION}"
             PRERELEASE_FLAG=""
           else
-            RELEASE_NAME="Rancher Charts ${VERSION} (Pre-release)"
+            RELEASE_NAME="Rancher Assets ${VERSION} (Pre-release)"
             PRERELEASE_FLAG="--prerelease"
           fi
 
@@ -155,7 +158,7 @@ This updates the rancher-charts image to ${VERSION}.
 
           gh release create "${VERSION}" \
             --title "${RELEASE_NAME}" \
-            --notes "## Rancher Charts ${VERSION}
+            --notes "## Rancher Assets ${VERSION}
 
 **Chart Major**: ${MAJOR}
 **Target Rancher Branch**: ${TARGET_BRANCH}
@@ -163,7 +166,7 @@ This updates the rancher-charts image to ${VERSION}.
 
 ### Image
 \`\`\`
-${REGISTRY}/${ORG}/${REPO}:${VERSION}
+${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${VERSION}
 \`\`\`
 
 ### Upstream Sources
@@ -174,7 +177,7 @@ ${REGISTRY}/${ORG}/${REPO}:${VERSION}
 | rancher/rke2-charts | ${RKE2_BRANCH} | \`${RKE2_COMMIT:0:8}\` |
 
 ### Multi-arch Image
-\`${REGISTRY}/${ORG}/${REPO}:${VERSION}\` (linux/amd64, linux/arm64)
+\`${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${VERSION}\` (linux/amd64, linux/arm64)
 " \
             ${PRERELEASE_FLAG}
         env:
