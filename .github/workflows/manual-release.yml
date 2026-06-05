@@ -221,7 +221,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git tag -a "$VERSION" -m "Release $VERSION
+          git tag -a "$VERSION" -m "$(cat <<EOF
+Release $VERSION
 
 Chart Major: $MAJOR
 Release Type: ${{ github.event.inputs.release_type }}
@@ -229,7 +230,8 @@ Bump Type: ${{ github.event.inputs.bump_type }}
 
 Current Stable: ${{ matrix.release.current_stable }}
 Current Prerelease: ${{ matrix.release.current_prerelease }}
-"
+EOF
+          )"
 
           git push origin "$VERSION"
 
@@ -271,11 +273,14 @@ Current Prerelease: ${{ matrix.release.current_prerelease }}
             exit 0
           fi
 
-          git commit -m "Update versions after manual release
+          git commit -m "$(cat <<EOF
+Update versions after manual release
 
 Release Type: ${{ github.event.inputs.release_type }}
 Bump Type: ${{ github.event.inputs.bump_type }}
 Chart Majors: ${{ needs.validate-and-plan.outputs.chart_majors }}
-Commit: ${{ needs.validate-and-plan.outputs.commit_sha }}"
+Commit: ${{ needs.validate-and-plan.outputs.commit_sha }}
+EOF
+          )"
 
           git push origin versions
