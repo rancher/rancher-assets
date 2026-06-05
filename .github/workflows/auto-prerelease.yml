@@ -174,14 +174,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git tag -a "$VERSION" -m "Auto pre-release $VERSION
+          git tag -a "$VERSION" -m "$(cat <<'EOF'
+          Auto pre-release $VERSION
 
-Chart Major: $MAJOR
-Triggered by: push to main
+          Chart Major: $MAJOR
+          Triggered by: push to main
 
-Current Stable: ${{ matrix.release.current_stable }}
-Current Prerelease: ${{ matrix.release.current_prerelease }}
-"
+          Current Stable: ${{ matrix.release.current_stable }}
+          Current Prerelease: ${{ matrix.release.current_prerelease }}
+          EOF
+          )"
 
           git push origin "$VERSION"
 
