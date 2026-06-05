@@ -130,8 +130,6 @@ jobs:
           fetch-depth: 0
 
       - name: Create and push tag
-        env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_PAT || secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ matrix.release.new_version }}"
           MAJOR="${{ matrix.release.major }}"
@@ -141,9 +139,11 @@ jobs:
           # Debug: Check which token is being used
           if [ -n "${{ secrets.WORKFLOW_PAT }}" ]; then
             echo "Using WORKFLOW_PAT (will trigger workflows)"
+            TOKEN="${{ secrets.WORKFLOW_PAT }}"
           else
             echo "WARNING: Using GITHUB_TOKEN fallback (will NOT trigger workflows)"
             echo "Configure WORKFLOW_PAT secret to enable automated builds"
+            TOKEN="${{ secrets.GITHUB_TOKEN }}"
           fi
 
           git config user.name "github-actions[bot]"
@@ -157,9 +157,8 @@ jobs:
             "${{ matrix.release.current_stable }}" \
             "${{ matrix.release.current_prerelease }}"
 
-          # Use gh to setup git auth and push (WORKFLOW_PAT required to trigger workflows)
-          gh auth setup-git
-          git push origin "$VERSION"
+          # Push tag with explicit token authentication
+          git push "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" "$VERSION"
 
   update-versions-branch:
     needs: [validate-and-plan, create-tags]
