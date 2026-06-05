@@ -9,6 +9,25 @@ Quick reference for Release Team to manage rancher-assets releases.
 - **Versions tracked** on orphan `versions` branch (not in main)
 - **Git tags** trigger builds automatically
 
+## Setup Requirements
+
+### Required Secrets
+
+The workflows require these GitHub secrets to be configured:
+
+**`WORKFLOW_PAT`** (Required for tag-triggered workflows)
+- Personal Access Token with `repo` scope
+- Used to push tags that trigger build workflows
+- Without this, workflows won't trigger automated builds
+- Fallback: Uses `GITHUB_TOKEN` (but won't trigger workflows)
+
+**`RANCHER_REPO_TOKEN`** (Optional - for rancher/rancher PRs)
+- PAT with access to create PRs in `rancher/rancher`
+- Only needed if you want automated PRs on stable releases
+- If not set, stable releases won't create rancher/rancher PRs
+
+**Configure in:** Repository Settings → Secrets and variables → Actions → New repository secret
+
 ## Quick Actions
 
 ### View Current Versions

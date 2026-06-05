@@ -210,6 +210,7 @@ jobs:
         with:
           ref: ${{ needs.validate-and-plan.outputs.commit_sha }}
           fetch-depth: 0
+          token: ${{ secrets.WORKFLOW_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Create and push tag
         run: |
