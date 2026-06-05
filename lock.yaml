@@ -1,0 +1,66 @@
+chart-versions:
+    v0:
+        latest-stable: null
+        latest-prerelease: null
+        updated-at: null
+        upstream-refs:
+            prod:
+                charts:
+                    branch: release-v2.14
+                    commit: f408a794062923524cb3228911dfb8d507a82762
+                    fetched-at: 2026-06-05T19:47:08.231716Z
+                partner:
+                    branch: main
+                    commit: 13b90384066cc1bdfebb0d70592c921e427a211c
+                    fetched-at: 2026-06-05T19:47:08.515744Z
+                rke2:
+                    branch: main
+                    commit: d086587815d18f79d9079d622ee5b120f60d80e6
+                    fetched-at: 2026-06-05T19:47:08.670118Z
+            dev:
+                charts:
+                    branch: dev-v2.14
+                    commit: a7b9d818214a34d4e76f240aa180756dcee26697
+                    fetched-at: 2026-06-05T19:47:08.900515Z
+                partner:
+                    branch: main
+                    commit: 13b90384066cc1bdfebb0d70592c921e427a211c
+                    fetched-at: 2026-06-05T19:47:09.128737Z
+                rke2:
+                    branch: main
+                    commit: d086587815d18f79d9079d622ee5b120f60d80e6
+                    fetched-at: 2026-06-05T19:47:09.294473Z
+    v1:
+        latest-stable: null
+        latest-prerelease: null
+        updated-at: null
+        upstream-refs:
+            prod:
+                charts:
+                    branch: release-v2.15
+                    commit: 0cfad74195c427ec67b5df7990c37bad67c45dca
+                    fetched-at: 2026-06-05T19:47:09.552543Z
+                partner:
+                    branch: main
+                    commit: 13b90384066cc1bdfebb0d70592c921e427a211c
+                    fetched-at: 2026-06-05T19:47:09.799175Z
+                rke2:
+                    branch: main
+                    commit: d086587815d18f79d9079d622ee5b120f60d80e6
+                    fetched-at: 2026-06-05T19:47:09.970112Z
+            dev:
+                charts:
+                    branch: dev-v2.15
+                    commit: b7652dacbd69130b2e2bdd8ccc9c733b4fdeceda
+                    fetched-at: 2026-06-05T19:47:10.129193Z
+                partner:
+                    branch: main
+                    commit: 13b90384066cc1bdfebb0d70592c921e427a211c
+                    fetched-at: 2026-06-05T19:47:10.32911Z
+                rke2:
+                    branch: main
+                    commit: d086587815d18f79d9079d622ee5b120f60d80e6
+                    fetched-at: 2026-06-05T19:47:10.503328Z
+copy-script-hash: 0b4b5e16762219935a48130d2e7b907f36da41f017b070dacff6bd40cf76e670
+generated-at: 2026-06-05T19:47:10.504599Z
+generator-version: v0.1.0
