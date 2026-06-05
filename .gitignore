@@ -33,3 +33,6 @@ coverage.html
 # Local testing
 /test-output/
 /charts-test/
+
+# Versions worktree
+/versions-dir

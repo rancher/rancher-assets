@@ -66,19 +66,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fetch versions branch
+      - name: Set up versions worktree
         run: |
-          git fetch origin versions:versions
+          # Fetch versions branch and set up worktree
+          git fetch origin versions
+          git worktree add ./versions-dir origin/versions
 
       - name: Plan prerelease bumps
         id: plan
         run: |
-          # Switch to versions branch to read current versions
-          git checkout versions
-
-          # Use Go tool to plan releases
+          # Use Go tool to plan releases (main.go in current dir, versions.yaml in worktree)
           RELEASE_PLAN=$(go run main.go plan-release \
-            --versions-file=versions.yaml \
+            --versions-file=./versions-dir/versions.yaml \
             --type=auto \
             --changed-majors='${{ needs.detect-changes.outputs.changed_majors }}' \
             --verbose)
