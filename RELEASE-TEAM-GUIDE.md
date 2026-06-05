@@ -15,11 +15,12 @@ Quick reference for Release Team to manage rancher-assets releases.
 
 The workflows require these GitHub secrets to be configured:
 
-**`WORKFLOW_PAT`** (Required for tag-triggered workflows)
+**`WORKFLOW_PAT`** (Required for automated releases)
 - Personal Access Token with `repo` scope
-- Used to push tags that trigger build workflows
-- Without this, workflows won't trigger automated builds
-- Fallback: Uses `GITHUB_TOKEN` (but won't trigger workflows)
+- Used ONLY to push tags that trigger build workflows
+- Without this, tags are created but builds won't trigger
+- Fallback: Uses `GITHUB_TOKEN` (creates tags but doesn't trigger builds)
+- Note: `GITHUB_TOKEN` is used for everything else (versions branch, etc.)
 
 **`RANCHER_REPO_TOKEN`** (Optional - for rancher/rancher PRs)
 - PAT with access to create PRs in `rancher/rancher`

@@ -210,9 +210,10 @@ jobs:
         with:
           ref: ${{ needs.validate-and-plan.outputs.commit_sha }}
           fetch-depth: 0
-          token: ${{ secrets.WORKFLOW_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Create and push tag
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT || secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ matrix.release.new_version }}"
           MAJOR="${{ matrix.release.major }}"
@@ -230,6 +231,8 @@ jobs:
             "${{ matrix.release.current_stable }}" \
             "${{ matrix.release.current_prerelease }}"
 
+          # Use gh to setup git auth and push (WORKFLOW_PAT required to trigger workflows)
+          gh auth setup-git
           git push origin "$VERSION"
 
   update-versions-branch:
