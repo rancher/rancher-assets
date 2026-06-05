@@ -1,0 +1,46 @@
+# Rancher Assets Configuration
+# Defines chart major versions and their upstream source configurations
+# This file is STATIC - only changes when adding new Rancher minors or updating base images
+
+chart-versions:
+  # Charts v0.x series for Rancher 2.14.x
+  v0:
+    rancher-branch: release/v2.14
+    prod:
+      charts-branch: release-v2.14
+      partner-branch: main
+      rke2-branch: main
+    dev:
+      charts-branch: dev-v2.14
+      partner-branch: main
+      rke2-branch: main
+
+  # Charts v1.x series for Rancher 2.15.x
+  v1:
+    rancher-branch: release/v2.15
+    prod:
+      charts-branch: release-v2.15
+      partner-branch: main
+      rke2-branch: main
+    dev:
+      charts-branch: dev-v2.15
+      partner-branch: main
+      rke2-branch: main
+
+# Base images (BCI versions)
+base-image:
+  bci-version: "16.0"
+
+# Upstream chart repositories
+# Each repo has a URL and a catalog path (with integrity hash)
+# The path hashes are content-addressable identifiers - DO NOT CHANGE
+cluster-repos:
+  charts:
+    url: https://git.rancher.io/charts
+    path: /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721
+  partner:
+    url: https://git.rancher.io/partner-charts
+    path: /var/lib/rancher-data/local-catalogs/v2/rancher-partner-charts/8f17acdce9bffd6e05a58a3798840e408c4ea71783381ecd2e9af30baad65974
+  rke2:
+    url: https://git.rancher.io/rke2-charts
+    path: /var/lib/rancher-data/local-catalogs/v2/rancher-rke2-charts/675f1b63a0a83905972dcab2794479ed599a6f41b86cd6193d69472d0fa889c9
