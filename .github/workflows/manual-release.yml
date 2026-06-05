@@ -129,14 +129,13 @@ jobs:
           ref: ${{ needs.validate-and-plan.outputs.commit_sha }}
           fetch-depth: 0
 
-      - name: Create release
+      - name: Create and push tag
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT || secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ matrix.release.new_version }}"
-          MAJOR="${{ matrix.release.major }}"
 
-          echo "Creating release $VERSION at ${{ needs.validate-and-plan.outputs.commit_sha }}"
+          echo "Creating tag $VERSION at ${{ needs.validate-and-plan.outputs.commit_sha }}"
 
           # Debug: Check which token is being used
           if [ -n "${{ secrets.WORKFLOW_PAT }}" ]; then
@@ -146,29 +145,21 @@ jobs:
             echo "Configure WORKFLOW_PAT secret to enable automated builds"
           fi
 
-          # Generate release notes
-          RELEASE_NOTES=$(.github/scripts/generate-manual-release-notes.sh \
+          # Create annotated tag using script
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          .github/scripts/create-release-tag.sh \
             "$VERSION" \
-            "$MAJOR" \
+            "${{ needs.validate-and-plan.outputs.commit_sha }}" \
+            "${{ matrix.release.major }}" \
             "${{ github.event.inputs.release_type }}" \
             "${{ github.event.inputs.bump_type }}" \
             "${{ matrix.release.current_stable }}" \
-            "${{ matrix.release.current_prerelease }}")
+            "${{ matrix.release.current_prerelease }}"
 
-          # Create draft release (creates tag and triggers build workflow)
-          # Will be undrafted by build-release.yml after successful build
-          if [ "${{ github.event.inputs.release_type }}" = "stable" ]; then
-            PRERELEASE_FLAG=""
-          else
-            PRERELEASE_FLAG="--prerelease"
-          fi
-
-          gh release create "$VERSION" \
-            --target "${{ needs.validate-and-plan.outputs.commit_sha }}" \
-            --title "Rancher Assets $VERSION" \
-            --notes "$RELEASE_NOTES" \
-            $PRERELEASE_FLAG \
-            --draft
+          # Push tag to trigger release workflow
+          git push origin "$VERSION"
 
   update-versions-branch:
     needs: [validate-and-plan, create-tags]

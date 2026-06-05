@@ -113,13 +113,13 @@ jobs:
           ref: ${{ needs.detect-changes.outputs.commit_sha }}
           fetch-depth: 0
 
-      - name: Create prerelease
+      - name: Create and push tag
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT || secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ matrix.release.new_version }}"
 
-          echo "Creating auto prerelease $VERSION at ${{ needs.detect-changes.outputs.commit_sha }}"
+          echo "Creating tag $VERSION at ${{ needs.detect-changes.outputs.commit_sha }}"
 
           # Debug: Check which token is being used
           if [ -n "${{ secrets.WORKFLOW_PAT }}" ]; then
@@ -129,29 +129,19 @@ jobs:
             echo "Configure WORKFLOW_PAT secret to enable automated builds"
           fi
 
-          # Generate release notes
-          cat > /tmp/release-notes.md <<EOF
-          Auto pre-release $VERSION
+          # Create annotated tag using script
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          **Chart Major**: ${{ matrix.release.major }}
-          **Triggered by**: push to main
+          .github/scripts/create-prerelease-tag.sh \
+            "$VERSION" \
+            "${{ needs.detect-changes.outputs.commit_sha }}" \
+            "${{ matrix.release.major }}" \
+            "${{ matrix.release.current_stable }}" \
+            "${{ matrix.release.current_prerelease }}"
 
-          **Current Stable**: ${{ matrix.release.current_stable }}
-          **Current Prerelease**: ${{ matrix.release.current_prerelease }}
-
-          ---
-
-          This is an automated pre-release. Check the [Actions](../../actions/workflows/build-release.yml) tab for build status.
-          EOF
-
-          # Create draft prerelease (creates tag and triggers build workflow)
-          # Will be undrafted by build-release.yml after successful build
-          gh release create "$VERSION" \
-            --target "${{ needs.detect-changes.outputs.commit_sha }}" \
-            --title "Rancher Assets $VERSION (Pre-release)" \
-            --notes-file /tmp/release-notes.md \
-            --prerelease \
-            --draft
+          # Push tag to trigger release workflow
+          git push origin "$VERSION"
 
   update-versions-branch:
     needs: [detect-changes, plan-prereleases, create-tags]
