@@ -1,0 +1,443 @@
+# Versioning
+
+This document defines how rancher-assets handles versioning for chart images.
+
+## Chart Major Versions
+
+This repository uses **chart major versions** (v0, v1, v2, etc.) that align with **Rancher minor versions**. Each chart major tracks a specific set of upstream chart repositories at branches corresponding to a Rancher release line.
+
+### Chart Major to Rancher Minor Alignment
+
+| Chart Major | Rancher Version | Charts Branch (prod) | Charts Branch (dev) | Status |
+|-------------|-----------------|---------------------|---------------------|---------|
+| v0          | 2.14.x          | release-v2.14       | dev-v2.14          | Active  |
+| v1          | 2.15.x          | release-v2.15       | dev-v2.15          | Active  |
+
+**Note:** This table will grow as new Rancher minor versions are released. Each new Rancher minor (2.16, 2.17, etc.) gets a corresponding chart major (v2, v3, etc.).
+
+## Version Format
+
+Chart images use semantic versioning with the chart major as the major version component:
+
+### Production Releases (Stable)
+
+Production releases use clean semantic versioning:
+
+```
+<chart-major>.<minor>.<patch>
+```
+
+**Examples:**
+- `v0.1.0` - First stable release for Rancher 2.14.x
+- `v0.2.0` - Minor release for Rancher 2.14.x
+- `v1.0.0` - First stable release for Rancher 2.15.x
+- `v1.2.3` - Maintenance release for Rancher 2.15.x
+
+### Pre-Releases
+
+Pre-releases use release candidate identifiers:
+
+```
+<chart-major>.<minor>.<patch>-rc.<number>
+```
+
+**Examples:**
+- `v1.0.0-rc.1` - First release candidate for v1.0.0
+- `v1.0.0-rc.2` - Second release candidate for v1.0.0
+- `v0.1.1-rc.1` - Release candidate for patch release
+
+Pre-releases are:
+- **Auto-generated** when changes merge to main
+- **Manually triggered** by Release Team for validation
+- Built from appropriate **dev** or **prod** branches in lock.yaml
+- Intended for testing before promoting to stable
+
+## Version Tracking: Orphan Branch
+
+Versions are tracked on an **orphan branch** named `versions`, separate from code history on `main`.
+
+### Why Orphan Branch?
+
+✅ **No noise on main** - Version bumps don't clutter code history  
+✅ **Batch releases** - Multiple chart majors can share one commit  
+✅ **Clean audit trail** - Version history separate from code changes  
+✅ **No workflow loops** - Version updates don't trigger rebuilds  
+
+### versions.yaml Structure
+
+```yaml
+# On orphan 'versions' branch
+v0:
+  stable:
+    tag: v0.1.0
+    updated-at: "2026-06-05T10:30:00Z"
+  prerelease:
+    tag: v0.1.1-rc.2
+    updated-at: "2026-06-05T11:45:00Z"
+v1:
+  stable:
+    tag: v1.2.0
+    updated-at: "2026-06-04T14:20:00Z"
+  prerelease:
+    tag: v1.3.0-rc.1
+    updated-at: "2026-06-05T12:00:00Z"
+```
+
+### Querying Versions
+
+```bash
+# Checkout versions branch
+git checkout versions
+
+# Latest stable for v1
+yq '.v1.stable.tag' versions.yaml
+# v1.2.0
+
+# Latest prerelease for v0
+yq '.v0.prerelease.tag' versions.yaml
+# v0.1.1-rc.2
+
+# When was v1 last stable released?
+yq '.v1.stable.updated-at' versions.yaml
+# 2026-06-04T14:20:00Z
+
+# Return to main
+git checkout main
+```
+
+## Lock File: Upstream Commit Tracking Only
+
+The `lock.yaml` file on `main` branch tracks **upstream repository commits only**:
+
+```yaml
+chart-versions:
+  v0:
+    upstream-refs:
+      prod:  # Production upstream refs (release-v2.14 branches)
+        charts: { branch: release-v2.14, commit: f408a794..., fetched-at: ... }
+        partner: { branch: main, commit: 13b90384..., fetched-at: ... }
+        rke2: { branch: main, commit: d0865878..., fetched-at: ... }
+      dev:   # Development upstream refs (dev-v2.14 branches)
+        charts: { branch: dev-v2.14, commit: a7b9d818..., fetched-at: ... }
+        partner: { branch: main, commit: 13b90384..., fetched-at: ... }
+        rke2: { branch: main, commit: d0865878..., fetched-at: ... }
+```
+
+**The lock file does NOT track release versions.** Use the orphan `versions` branch for that.
+
+## Build Types
+
+The build system automatically detects build type from the version tag:
+
+| Version Format | Build Type | Upstream Refs | Usage |
+|---------------|------------|---------------|-------|
+| `vX.Y.Z` (clean semver) | `prod` | `lock.yaml` → `upstream-refs.prod` | Production releases |
+| `vX.Y.Z-rc.N` | `dev` | `lock.yaml` → `upstream-refs.dev` | Pre-releases |
+
+This detection happens in the workflow and determines which upstream branch/commit refs are used from lock.yaml.
+
+## Release Workflows
+
+### 1. Automatic Pre-Releases (on merge to main)
+
+**Workflow:** `.github/workflows/auto-prerelease.yml`
+
+**Trigger:** Push to `main` branch when dockerfiles or config change
+
+**What it does:**
+1. Detects which chart majors changed
+2. Reads current versions from `versions` branch
+3. Auto-bumps prerelease versions (e.g., `v1.0.0-rc.1` → `v1.0.0-rc.2`)
+4. Creates git tags on the merge commit
+5. Updates `versions` branch
+6. Tag triggers build workflow
+
+**Example:**
+```
+PR: Bump BCI version (affects all Dockerfiles)
+  ↓
+Merge to main (commit abc123)
+  ↓
+Auto-prerelease workflow detects: v0 and v1 changed
+  ↓
+Reads versions branch:
+  v0.prerelease: v0.1.0-rc.3
+  v1.prerelease: v1.2.0-rc.1
+  ↓
+Auto-bumps:
+  v0.1.0-rc.3 → v0.1.0-rc.4
+  v1.2.0-rc.1 → v1.2.0-rc.2
+  ↓
+Creates tags on commit abc123:
+  - v0.1.0-rc.4
+  - v1.2.0-rc.2
+  ↓
+Updates versions branch
+  ↓
+Build workflow builds both images from abc123
+```
+
+### 2. Manual Releases (Release Team Control)
+
+**Workflow:** `.github/workflows/manual-release.yml`
+
+**Trigger:** Manual `workflow_dispatch`
+
+**Inputs:**
+- `commit_sha` - Commit to release (default: HEAD of main)
+- `chart_major` - Which chart major (empty = ALL)
+- `bump_type` - `minor` or `patch`
+- `release_type` - `prerelease` (default) or `stable`
+
+**Use Cases:**
+
+#### Scenario A: Rancher 2.15 releases → v1 gets minor bump
+```
+Release Team triggers:
+  commit_sha: [empty] (uses HEAD)
+  chart_major: v1
+  bump_type: minor
+  release_type: stable
+
+Result:
+  v1.2.0 → v1.3.0 (stable)
+  Tag created on HEAD of main
+```
+
+#### Scenario B: Critical patch for v0 only
+```
+Release Team triggers:
+  commit_sha: def456
+  chart_major: v0
+  bump_type: patch
+  release_type: stable
+
+Result:
+  v0.1.0 → v0.1.1 (stable)
+  Tag created on commit def456
+```
+
+#### Scenario C: BCI security fix affects all chart majors
+```
+Release Team triggers:
+  commit_sha: abc123
+  chart_major: [empty] ← ALL
+  bump_type: patch
+  release_type: prerelease
+
+Result:
+  v0.1.0 → v0.1.1-rc.1
+  v1.2.0 → v1.2.1-rc.1
+  All tags on same commit abc123
+```
+
+#### Scenario D: Validate upcoming minor release
+```
+Release Team triggers:
+  commit_sha: [empty]
+  chart_major: v1
+  bump_type: minor
+  release_type: prerelease
+
+Result:
+  v1.2.0 → v1.3.0-rc.1
+  Ready for validation before stable
+```
+
+### 3. Build and Release (on tag)
+
+**Workflow:** `.github/workflows/build-release.yml`
+
+**Trigger:** Tag matching `v*` pattern
+
+**What it does:**
+1. Parses tag to determine version and build type
+2. Builds multi-arch images (amd64, arm64)
+3. Pushes to Docker Hub
+4. Creates GitHub Release with metadata
+5. Creates PR to `rancher/rancher` (stable only)
+
+**Tag triggers build immediately:**
+```
+Tag created: v1.0.0
+  ↓
+build-release.yml triggers
+  ↓
+Reads lock.yaml from tagged commit
+  ↓
+Builds using prod refs (clean semver)
+  ↓
+Pushes images:
+  - docker.io/rancher/rancher-charts:v1.0.0
+  - docker.io/rancher/rancher-charts:v1.0.0-amd64
+  - docker.io/rancher/rancher-charts:v1.0.0-arm64
+  ↓
+Creates GitHub Release
+  ↓
+Creates PR to rancher/rancher (if stable)
+```
+
+## Version Lifecycle
+
+### Development Flow
+
+```bash
+# 1. Make changes (e.g., bump BCI version)
+make generate
+git commit -m "Bump BCI to fix CVE"
+
+# 2. Create PR, merge to main
+# (PR reviewed, CI validates)
+
+# 3. Auto-prerelease workflow triggers
+# - Detects changed dockerfiles
+# - Auto-bumps prereleases
+# - Creates tags
+# - Builds images
+
+# 4. Images available for testing
+# docker.io/rancher/rancher-charts:v0.1.0-rc.4
+# docker.io/rancher/rancher-charts:v1.2.0-rc.2
+```
+
+### Stable Release Flow
+
+```bash
+# 1. Release Team validates prerelease
+# Test v1.2.0-rc.2 in staging
+
+# 2. Release Team triggers manual workflow
+# Via GitHub UI:
+#   chart_major: v1
+#   bump_type: patch
+#   release_type: stable
+
+# 3. Workflow creates stable tag
+# v1.2.0 created on tested commit
+
+# 4. Build workflow runs
+# - Builds with prod refs
+# - Pushes images
+# - Creates PR to rancher/rancher
+
+# 5. Rancher PR merged
+# rancher/rancher picks up v1.2.0
+```
+
+### Querying Release History
+
+```bash
+# All stable releases for v1
+git tag -l "v1.*" --sort=-version:refname | grep -v '-'
+
+# Latest stable for v1
+git tag -l "v1.*" --sort=-version:refname | grep -v '-' | head -1
+
+# All prereleases for current v0 minor
+git tag -l "v0.1.*-rc.*" --sort=-version:refname
+
+# What commit was v1.2.0 built from?
+git rev-parse v1.2.0
+
+# View lock state at v1.2.0
+git show v1.2.0:lock.yaml
+```
+
+## Repository Structure
+
+Each chart major has:
+- **Dockerfile** - `dockerfiles/Dockerfile.v0`, `dockerfiles/Dockerfile.v1`, etc.
+- **Config** - Entry in `config.yaml` defining branches
+- **Lock state** - Entry in `lock.yaml` tracking commits
+- **Versions** - Entry in `versions.yaml` (on orphan branch) tracking releases
+
+## Examples
+
+### Building a Specific Version
+
+```bash
+# Prerelease build (uses dev refs from lock.yaml)
+make build CHART_MAJOR=v1 VERSION=v1.0.0-rc.1
+
+# Stable build (uses prod refs from lock.yaml)
+make build CHART_MAJOR=v1 VERSION=v1.0.0
+```
+
+### Building All Chart Majors
+
+```bash
+# All dev builds with auto-generated versions
+make build-all
+# Produces: v0.0.0-dev.20260605.abc1234, v1.0.0-dev.20260605.abc1234, ...
+
+# Push all dev builds to registry
+make push-all
+# Same as build-all but pushes to registry
+```
+
+### Fork Versioning
+
+Forks can use the same versioning scheme with their own registry:
+
+```bash
+make push-all \
+  REGISTRY=ghcr.io \
+  ORG=myorg \
+  REPO=my-charts \
+  SOURCE_REPO=myorg/rancher-assets
+# Produces: ghcr.io/myorg/my-charts:v0.0.0-dev.20260605.abc1234
+```
+
+## Image Labels
+
+All images include OCI labels for traceability:
+
+```dockerfile
+org.opencontainers.image.version=${VERSION}
+io.rancher.build-type=${BUILD_TYPE}           # "dev" or "prod"
+io.rancher.target-branch=${TARGET_BRANCH}     # Rancher branch (release/v2.15)
+io.rancher.charts.branch=${CHART_BRANCH}      # Charts branch used
+io.rancher.charts.commit=${CHART_COMMIT}      # Charts commit SHA
+io.rancher.partner.branch=${PARTNER_BRANCH}   # Partner branch used
+io.rancher.partner.commit=${PARTNER_COMMIT}   # Partner commit SHA
+io.rancher.rke2.branch=${RKE2_BRANCH}         # RKE2 branch used
+io.rancher.rke2.commit=${RKE2_COMMIT}         # RKE2 commit SHA
+```
+
+These labels provide full supply chain traceability for every image.
+
+## Initial Setup
+
+To initialize the `versions` branch on a new repository:
+
+```bash
+# Run setup script
+./scripts/setup-versions-branch.sh
+
+# Push the orphan branch
+git push origin versions
+
+# Return to main
+git checkout main
+```
+
+The script creates `versions.yaml` with entries for all chart majors defined in `config.yaml`.
+
+## Summary
+
+**Version tracking:**
+- `main` branch: code, config, dockerfiles, lock.yaml (upstream commits only)
+- `versions` branch (orphan): versions.yaml (release versions only)
+- Git tags: point to commits, trigger builds
+
+**Releases:**
+- **Auto prereleases**: On merge to main (for changed chart majors)
+- **Manual releases**: Release Team workflow_dispatch (full control)
+- **Build on tag**: Automatic build + publish when tag created
+
+**Benefits:**
+- ✅ Clean code history (no version bump commits)
+- ✅ Batch releases (multiple majors, one commit)
+- ✅ Full audit trail (versions branch history)
+- ✅ Flexible control (auto + manual workflows)
+- ✅ No workflow loops (version updates isolated)

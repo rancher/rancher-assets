@@ -1,0 +1,245 @@
+name: Auto Pre-release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'dockerfiles/**'
+      - 'config.yaml'
+      - 'lock.yaml'
+      - 'package/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-prerelease
+  cancel-in-progress: false
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      changed_majors: ${{ steps.detect.outputs.changed_majors }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+      commit_sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Get commit SHA
+        id: commit
+        run: |
+          echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Detect changed dockerfiles
+        id: detect
+        run: |
+          # Get files changed in this push
+          CHANGED_FILES=$(git diff --name-only HEAD^..HEAD)
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Extract chart majors from changed dockerfiles
+          CHANGED_MAJORS=$(echo "$CHANGED_FILES" | grep '^dockerfiles/Dockerfile\.' | sed 's|dockerfiles/Dockerfile\.||' | sort -u)
+
+          if [ -z "$CHANGED_MAJORS" ]; then
+            # Check if config/lock/package changed (affects all)
+            if echo "$CHANGED_FILES" | grep -qE '^(config\.yaml|lock\.yaml|package/)'; then
+              echo "Global change detected - affects all chart majors"
+              CHANGED_MAJORS=$(yq eval '.chart-versions | keys | .[]' config.yaml)
+            else
+              echo "No dockerfile or global changes detected"
+              echo "changed_majors=[]" >> $GITHUB_OUTPUT
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+
+          echo "Changed chart majors:"
+          echo "$CHANGED_MAJORS"
+
+          # Convert to JSON array
+          CHANGED_MAJORS_JSON=$(echo "$CHANGED_MAJORS" | jq -R -s -c 'split("\n")[:-1]')
+
+          echo "changed_majors=$CHANGED_MAJORS_JSON" >> $GITHUB_OUTPUT
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+
+          echo "Changed majors (JSON): $CHANGED_MAJORS_JSON"
+
+  plan-prereleases:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      release_plan: ${{ steps.plan.outputs.release_plan }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch versions branch
+        run: |
+          git fetch origin versions:versions
+
+      - name: Plan prerelease bumps
+        id: plan
+        run: |
+          # Switch to versions branch to read current versions
+          git checkout versions
+
+          RELEASE_PLAN="["
+          FIRST=true
+
+          echo '${{ needs.detect-changes.outputs.changed_majors }}' | jq -r '.[]' | while read -r MAJOR; do
+            echo "Planning prerelease bump for $MAJOR..."
+
+            # Get current versions
+            CURRENT_STABLE=$(yq eval ".${MAJOR}.stable.tag" versions.yaml)
+            CURRENT_PRERELEASE=$(yq eval ".${MAJOR}.prerelease.tag" versions.yaml)
+
+            echo "  Current: stable=$CURRENT_STABLE, prerelease=$CURRENT_PRERELEASE"
+
+            # Determine new prerelease version
+            if [ "$CURRENT_PRERELEASE" != "null" ] && [ -n "$CURRENT_PRERELEASE" ]; then
+              # Check if prerelease is for current stable version
+              if [ "$CURRENT_STABLE" != "null" ] && [[ "$CURRENT_PRERELEASE" =~ ^${CURRENT_STABLE}-rc\. ]]; then
+                # Bump RC number
+                RC_NUM=$(echo "$CURRENT_PRERELEASE" | sed -E 's/.*-rc\.([0-9]+)/\1/')
+                NEW_RC=$((RC_NUM + 1))
+                NEW_VERSION="${CURRENT_STABLE}-rc.${NEW_RC}"
+                echo "  New: $NEW_VERSION (RC bump)"
+              else
+                # Prerelease is for next version - bump RC
+                BASE=$(echo "$CURRENT_PRERELEASE" | sed -E 's/-rc\..*//')
+                RC_NUM=$(echo "$CURRENT_PRERELEASE" | sed -E 's/.*-rc\.([0-9]+)/\1/')
+                NEW_RC=$((RC_NUM + 1))
+                NEW_VERSION="${BASE}-rc.${NEW_RC}"
+                echo "  New: $NEW_VERSION (RC bump)"
+              fi
+            else
+              # No current prerelease - create first RC for next patch
+              if [ "$CURRENT_STABLE" = "null" ] || [ -z "$CURRENT_STABLE" ]; then
+                # No stable yet - start with v*.0.0-rc.1
+                NEW_VERSION="${MAJOR}.0.0-rc.1"
+              else
+                # Bump patch and add -rc.1
+                if [[ "$CURRENT_STABLE" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+                  MAJOR_NUM="${BASH_REMATCH[1]}"
+                  MINOR_NUM="${BASH_REMATCH[2]}"
+                  PATCH_NUM="${BASH_REMATCH[3]}"
+                  NEW_PATCH=$((PATCH_NUM + 1))
+                  NEW_VERSION="v${MAJOR_NUM}.${MINOR_NUM}.${NEW_PATCH}-rc.1"
+                else
+                  echo "Error: Invalid stable version format: $CURRENT_STABLE"
+                  exit 1
+                fi
+              fi
+              echo "  New: $NEW_VERSION (first RC for next patch)"
+            fi
+
+            if [ "$FIRST" = "false" ]; then
+              RELEASE_PLAN="${RELEASE_PLAN},"
+            fi
+            FIRST=false
+
+            RELEASE_PLAN="${RELEASE_PLAN}{\"major\":\"${MAJOR}\",\"current_stable\":\"${CURRENT_STABLE}\",\"current_prerelease\":\"${CURRENT_PRERELEASE}\",\"new_version\":\"${NEW_VERSION}\"}"
+          done
+
+          RELEASE_PLAN="${RELEASE_PLAN}]"
+          echo "release_plan=$RELEASE_PLAN" >> $GITHUB_OUTPUT
+
+          echo ""
+          echo "Auto Pre-release Plan:"
+          echo "$RELEASE_PLAN" | jq .
+
+      - name: Summary
+        run: |
+          echo "## Auto Pre-release Plan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit**: \`${{ needs.detect-changes.outputs.commit_sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Versions" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.plan.outputs.release_plan }}' | jq -r '.[] | "- **\(.major)**: \(.new_version)"' >> $GITHUB_STEP_SUMMARY
+
+  create-tags:
+    needs: [detect-changes, plan-prereleases]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        release: ${{ fromJson(needs.plan-prereleases.outputs.release_plan) }}
+    steps:
+      - name: Checkout at commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.detect-changes.outputs.commit_sha }}
+          fetch-depth: 0
+
+      - name: Create and push tag
+        run: |
+          VERSION="${{ matrix.release.new_version }}"
+          MAJOR="${{ matrix.release.major }}"
+
+          echo "Creating auto prerelease tag $VERSION at ${{ needs.detect-changes.outputs.commit_sha }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$VERSION" -m "Auto pre-release $VERSION
+
+Chart Major: $MAJOR
+Triggered by: push to main
+
+Current Stable: ${{ matrix.release.current_stable }}
+Current Prerelease: ${{ matrix.release.current_prerelease }}
+"
+
+          git push origin "$VERSION"
+
+  update-versions-branch:
+    needs: [detect-changes, plan-prereleases, create-tags]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout versions branch
+        uses: actions/checkout@v4
+        with:
+          ref: versions
+          fetch-depth: 1
+
+      - name: Update versions.yaml
+        run: |
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          echo '${{ needs.plan-prereleases.outputs.release_plan }}' | jq -c '.[]' | while read -r release; do
+            MAJOR=$(echo "$release" | jq -r '.major')
+            NEW_VERSION=$(echo "$release" | jq -r '.new_version')
+
+            echo "Updating $MAJOR prerelease to $NEW_VERSION"
+
+            yq eval ".${MAJOR}.prerelease.tag = \"${NEW_VERSION}\"" -i versions.yaml
+            yq eval ".${MAJOR}.prerelease.updated-at = \"${TIMESTAMP}\"" -i versions.yaml
+          done
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add versions.yaml
+
+          if git diff --cached --quiet; then
+            echo "No changes to versions.yaml"
+            exit 0
+          fi
+
+          git commit -m "Auto-update prerelease versions
+
+Triggered by: push to main (${{ needs.detect-changes.outputs.commit_sha }})
+Changed majors: ${{ needs.detect-changes.outputs.changed_majors }}"
+
+          git push origin versions
