@@ -76,70 +76,20 @@ jobs:
           # Switch to versions branch to read current versions
           git checkout versions
 
-          RELEASE_PLAN="["
-          FIRST=true
+          # Use Go tool to plan releases
+          RELEASE_PLAN=$(go run main.go plan-release \
+            --versions-file=versions.yaml \
+            --type=auto \
+            --changed-majors='${{ needs.detect-changes.outputs.changed_majors }}' \
+            --verbose)
 
-          while read -r MAJOR; do
-            echo "Planning prerelease bump for $MAJOR..."
-
-            # Get current versions
-            CURRENT_STABLE=$(yq eval ".${MAJOR}.stable.tag" versions.yaml)
-            CURRENT_PRERELEASE=$(yq eval ".${MAJOR}.prerelease.tag" versions.yaml)
-
-            echo "  Current: stable=$CURRENT_STABLE, prerelease=$CURRENT_PRERELEASE"
-
-            # Determine new prerelease version
-            if [ "$CURRENT_PRERELEASE" != "null" ] && [ -n "$CURRENT_PRERELEASE" ]; then
-              # Check if prerelease is for current stable version
-              if [ "$CURRENT_STABLE" != "null" ] && [[ "$CURRENT_PRERELEASE" =~ ^${CURRENT_STABLE}-rc\. ]]; then
-                # Bump RC number
-                RC_NUM=$(echo "$CURRENT_PRERELEASE" | sed -E 's/.*-rc\.([0-9]+)/\1/')
-                NEW_RC=$((RC_NUM + 1))
-                NEW_VERSION="${CURRENT_STABLE}-rc.${NEW_RC}"
-                echo "  New: $NEW_VERSION (RC bump)"
-              else
-                # Prerelease is for next version - bump RC
-                BASE=$(echo "$CURRENT_PRERELEASE" | sed -E 's/-rc\..*//')
-                RC_NUM=$(echo "$CURRENT_PRERELEASE" | sed -E 's/.*-rc\.([0-9]+)/\1/')
-                NEW_RC=$((RC_NUM + 1))
-                NEW_VERSION="${BASE}-rc.${NEW_RC}"
-                echo "  New: $NEW_VERSION (RC bump)"
-              fi
-            else
-              # No current prerelease - create first RC for next patch
-              if [ "$CURRENT_STABLE" = "null" ] || [ -z "$CURRENT_STABLE" ]; then
-                # No stable yet - start with v*.0.0-rc.1
-                NEW_VERSION="${MAJOR}.0.0-rc.1"
-              else
-                # Bump patch and add -rc.1
-                if [[ "$CURRENT_STABLE" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
-                  MAJOR_NUM="${BASH_REMATCH[1]}"
-                  MINOR_NUM="${BASH_REMATCH[2]}"
-                  PATCH_NUM="${BASH_REMATCH[3]}"
-                  NEW_PATCH=$((PATCH_NUM + 1))
-                  NEW_VERSION="v${MAJOR_NUM}.${MINOR_NUM}.${NEW_PATCH}-rc.1"
-                else
-                  echo "Error: Invalid stable version format: $CURRENT_STABLE"
-                  exit 1
-                fi
-              fi
-              echo "  New: $NEW_VERSION (first RC for next patch)"
-            fi
-
-            if [ "$FIRST" = "false" ]; then
-              RELEASE_PLAN="${RELEASE_PLAN},"
-            fi
-            FIRST=false
-
-            RELEASE_PLAN="${RELEASE_PLAN}{\"major\":\"${MAJOR}\",\"current_stable\":\"${CURRENT_STABLE}\",\"current_prerelease\":\"${CURRENT_PRERELEASE}\",\"new_version\":\"${NEW_VERSION}\"}"
-          done < <(echo '${{ needs.detect-changes.outputs.changed_majors }}' | jq -r '.[]')
-
-          RELEASE_PLAN="${RELEASE_PLAN}]"
-          echo "release_plan=$RELEASE_PLAN" >> $GITHUB_OUTPUT
+          # Extract JSON array (last line of output)
+          RELEASE_PLAN_JSON=$(echo "$RELEASE_PLAN" | tail -1)
+          echo "release_plan=$RELEASE_PLAN_JSON" >> $GITHUB_OUTPUT
 
           echo ""
           echo "Auto Pre-release Plan:"
-          echo "$RELEASE_PLAN" | jq .
+          echo "$RELEASE_PLAN_JSON" | jq .
 
       - name: Summary
         run: |

@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/rancher-assets/internal/config"
 	"github.com/rancher/rancher-assets/internal/generator"
 	"github.com/rancher/rancher-assets/internal/lockfile"
+	"github.com/rancher/rancher-assets/internal/versions"
 )
 
 const (
@@ -38,6 +39,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "plan-release":
+		if err := planReleaseCommand(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -52,6 +58,10 @@ func printUsage() {
 	fmt.Println("  generate             Generate Dockerfiles and update lock.yaml")
 	fmt.Println("  changed-majors       Detect chart majors with upstream ref changes")
 	fmt.Println("                       Flags: --from=<commit> --to=<commit>")
+	fmt.Println("  plan-release         Plan version bumps for releases")
+	fmt.Println("                       Flags: --versions-file=<path> --type=<auto|manual>")
+	fmt.Println("                              --changed-majors=<json> (for auto)")
+	fmt.Println("                              --majors=<json> --bump=<minor|patch> --release=<stable|prerelease> (for manual)")
 }
 
 func generateCommand() error {
@@ -229,6 +239,91 @@ func changedMajorsCommand() error {
 
 	// Always output JSON array (for workflow consumption)
 	output, err := json.Marshal(changed)
+	if err != nil {
+		return fmt.Errorf("failed to marshal output: %w", err)
+	}
+
+	fmt.Println(string(output))
+	return nil
+}
+
+func planReleaseCommand() error {
+	// Parse flags
+	fs := flag.NewFlagSet("plan-release", flag.ExitOnError)
+	versionsFile := fs.String("versions-file", "", "Path to versions.yaml (required)")
+	planType := fs.String("type", "", "Plan type: auto or manual (required)")
+	changedMajorsJSON := fs.String("changed-majors", "", "JSON array of changed majors (for auto)")
+	majorsJSON := fs.String("majors", "", "JSON array of majors to release (for manual)")
+	bumpType := fs.String("bump", "", "Bump type: minor or patch (for manual)")
+	releaseType := fs.String("release", "", "Release type: stable or prerelease (for manual)")
+	verbose := fs.Bool("verbose", false, "Show detailed output")
+
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		return err
+	}
+
+	if *versionsFile == "" || *planType == "" {
+		return fmt.Errorf("--versions-file and --type are required")
+	}
+
+	// Load versions file
+	vf, err := versions.LoadVersionsFile(*versionsFile)
+	if err != nil {
+		return err
+	}
+
+	var plans []versions.ReleasePlan
+
+	switch *planType {
+	case "auto":
+		if *changedMajorsJSON == "" {
+			return fmt.Errorf("--changed-majors is required for auto type")
+		}
+
+		var changedMajors []string
+		if err := json.Unmarshal([]byte(*changedMajorsJSON), &changedMajors); err != nil {
+			return fmt.Errorf("failed to parse changed-majors JSON: %w", err)
+		}
+
+		plans, err = versions.PlanAutoPrerelease(vf, changedMajors)
+		if err != nil {
+			return err
+		}
+
+	case "manual":
+		if *majorsJSON == "" || *bumpType == "" || *releaseType == "" {
+			return fmt.Errorf("--majors, --bump, and --release are required for manual type")
+		}
+
+		var majors []string
+		if err := json.Unmarshal([]byte(*majorsJSON), &majors); err != nil {
+			return fmt.Errorf("failed to parse majors JSON: %w", err)
+		}
+
+		plans, err = versions.PlanManualRelease(vf, majors, *bumpType, *releaseType)
+		if err != nil {
+			return err
+		}
+
+	default:
+		return fmt.Errorf("invalid type: %s (must be auto or manual)", *planType)
+	}
+
+	// Verbose output
+	if *verbose {
+		if len(plans) == 0 {
+			fmt.Println("No releases planned")
+		} else {
+			fmt.Printf("Planned releases (%d):\n", len(plans))
+			for _, plan := range plans {
+				fmt.Printf("  %s: %s (stable=%s, prerelease=%s)\n",
+					plan.Major, plan.NewVersion, plan.CurrentStable, plan.CurrentPrerelease)
+			}
+		}
+	}
+
+	// Always output JSON for workflow consumption
+	output, err := json.Marshal(plans)
 	if err != nil {
 		return fmt.Errorf("failed to marshal output: %w", err)
 	}

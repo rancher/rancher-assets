@@ -85,106 +85,25 @@ jobs:
       - name: Plan version bumps
         id: plan
         run: |
-          COMMIT_SHA="${{ steps.setup.outputs.commit_sha }}"
-          BUMP_TYPE="${{ github.event.inputs.bump_type }}"
-          RELEASE_TYPE="${{ github.event.inputs.release_type }}"
-
           # Checkout versions branch to read current versions
           git checkout versions
 
-          # Process each chart major
-          RELEASE_PLAN="["
-          FIRST=true
+          # Use Go tool to plan releases
+          RELEASE_PLAN=$(go run main.go plan-release \
+            --versions-file=versions.yaml \
+            --type=manual \
+            --majors='${{ steps.setup.outputs.chart_majors }}' \
+            --bump='${{ github.event.inputs.bump_type }}' \
+            --release='${{ github.event.inputs.release_type }}' \
+            --verbose)
 
-          while read -r MAJOR; do
-            echo "Planning release for $MAJOR..."
-
-            # Get current versions
-            CURRENT_STABLE=$(yq eval ".${MAJOR}.stable.tag" versions.yaml)
-            CURRENT_PRERELEASE=$(yq eval ".${MAJOR}.prerelease.tag" versions.yaml)
-
-            # Determine base version for bump
-            if [ "$RELEASE_TYPE" = "stable" ]; then
-              # Stable releases bump from current stable (or 0.0.0 if none)
-              if [ "$CURRENT_STABLE" = "null" ] || [ -z "$CURRENT_STABLE" ]; then
-                BASE_VERSION="${MAJOR}.0.0"
-              else
-                BASE_VERSION="$CURRENT_STABLE"
-              fi
-            else
-              # Prerelease: check if we should bump from stable or continue prerelease series
-              if [ "$CURRENT_PRERELEASE" != "null" ] && [ -n "$CURRENT_PRERELEASE" ]; then
-                # Extract base version from current prerelease
-                BASE_VERSION=$(echo "$CURRENT_PRERELEASE" | sed -E 's/-rc\..*//')
-
-                # If current prerelease base matches stable, bump RC number
-                if [ "$CURRENT_STABLE" != "null" ] && [[ "$CURRENT_PRERELEASE" =~ ^${CURRENT_STABLE}-rc\. ]]; then
-                  RC_NUM=$(echo "$CURRENT_PRERELEASE" | sed -E 's/.*-rc\.([0-9]+)/\1/')
-                  NEW_RC=$((RC_NUM + 1))
-                  NEW_VERSION="${CURRENT_STABLE}-rc.${NEW_RC}"
-
-                  echo "  Current: stable=$CURRENT_STABLE, prerelease=$CURRENT_PRERELEASE"
-                  echo "  New: $NEW_VERSION (RC bump)"
-
-                  if [ "$FIRST" = "false" ]; then
-                    RELEASE_PLAN="${RELEASE_PLAN},"
-                  fi
-                  FIRST=false
-
-                  RELEASE_PLAN="${RELEASE_PLAN}{\"major\":\"${MAJOR}\",\"current_stable\":\"${CURRENT_STABLE}\",\"current_prerelease\":\"${CURRENT_PRERELEASE}\",\"new_version\":\"${NEW_VERSION}\",\"is_rc_bump\":true}"
-                  continue
-                fi
-              fi
-
-              # New prerelease series - bump from stable
-              if [ "$CURRENT_STABLE" = "null" ] || [ -z "$CURRENT_STABLE" ]; then
-                BASE_VERSION="${MAJOR}.0.0"
-              else
-                BASE_VERSION="$CURRENT_STABLE"
-              fi
-            fi
-
-            # Parse base version
-            if [[ "$BASE_VERSION" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
-              MAJOR_NUM="${BASH_REMATCH[1]}"
-              MINOR_NUM="${BASH_REMATCH[2]}"
-              PATCH_NUM="${BASH_REMATCH[3]}"
-            else
-              echo "Error: Invalid base version format: $BASE_VERSION"
-              exit 1
-            fi
-
-            # Bump version
-            if [ "$BUMP_TYPE" = "minor" ]; then
-              NEW_MINOR=$((MINOR_NUM + 1))
-              NEW_VERSION="v${MAJOR_NUM}.${NEW_MINOR}.0"
-            else
-              NEW_PATCH=$((PATCH_NUM + 1))
-              NEW_VERSION="v${MAJOR_NUM}.${MINOR_NUM}.${NEW_PATCH}"
-            fi
-
-            # Add -rc.1 suffix for prereleases
-            if [ "$RELEASE_TYPE" = "prerelease" ]; then
-              NEW_VERSION="${NEW_VERSION}-rc.1"
-            fi
-
-            echo "  Current: stable=$CURRENT_STABLE, prerelease=$CURRENT_PRERELEASE"
-            echo "  New: $NEW_VERSION ($BUMP_TYPE bump)"
-
-            if [ "$FIRST" = "false" ]; then
-              RELEASE_PLAN="${RELEASE_PLAN},"
-            fi
-            FIRST=false
-
-            RELEASE_PLAN="${RELEASE_PLAN}{\"major\":\"${MAJOR}\",\"current_stable\":\"${CURRENT_STABLE}\",\"current_prerelease\":\"${CURRENT_PRERELEASE}\",\"new_version\":\"${NEW_VERSION}\",\"is_rc_bump\":false}"
-          done < <(echo '${{ steps.setup.outputs.chart_majors }}' | jq -r '.[]')
-
-          RELEASE_PLAN="${RELEASE_PLAN}]"
-          echo "release_plan=$RELEASE_PLAN" >> $GITHUB_OUTPUT
+          # Extract JSON array (last line of output)
+          RELEASE_PLAN_JSON=$(echo "$RELEASE_PLAN" | tail -1)
+          echo "release_plan=$RELEASE_PLAN_JSON" >> $GITHUB_OUTPUT
 
           echo ""
           echo "Release Plan:"
-          echo "$RELEASE_PLAN" | jq .
+          echo "$RELEASE_PLAN_JSON" | jq .
 
       - name: Summary
         run: |
