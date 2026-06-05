@@ -159,7 +159,7 @@ jobs:
             "${{ matrix.release.current_prerelease }}"
 
           # Push tag to trigger release workflow
-          git push origin "$VERSION"
+          git push https://x-access-token:${{ secrets.WORKFLOW_PAT }}@github.com/${{ github.repository }} "$VERSION"
 
   update-versions-branch:
     needs: [validate-and-plan, create-tags]
