@@ -144,12 +144,14 @@ jobs:
           This is an automated pre-release. Check the [Actions](../../actions/workflows/build-release.yml) tab for build status.
           EOF
 
-          # Create prerelease (creates tag automatically and triggers workflow)
+          # Create draft prerelease (creates tag and triggers build workflow)
+          # Will be undrafted by build-release.yml after successful build
           gh release create "$VERSION" \
             --target "${{ needs.detect-changes.outputs.commit_sha }}" \
             --title "Rancher Assets $VERSION (Pre-release)" \
             --notes-file /tmp/release-notes.md \
-            --prerelease
+            --prerelease \
+            --draft
 
   update-versions-branch:
     needs: [detect-changes, plan-prereleases, create-tags]

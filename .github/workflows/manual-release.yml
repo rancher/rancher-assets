@@ -155,7 +155,8 @@ jobs:
             "${{ matrix.release.current_stable }}" \
             "${{ matrix.release.current_prerelease }}")
 
-          # Create release (creates tag automatically and triggers workflow)
+          # Create draft release (creates tag and triggers build workflow)
+          # Will be undrafted by build-release.yml after successful build
           if [ "${{ github.event.inputs.release_type }}" = "stable" ]; then
             PRERELEASE_FLAG=""
           else
@@ -166,7 +167,8 @@ jobs:
             --target "${{ needs.validate-and-plan.outputs.commit_sha }}" \
             --title "Rancher Assets $VERSION" \
             --notes "$RELEASE_NOTES" \
-            $PRERELEASE_FLAG
+            $PRERELEASE_FLAG \
+            --draft
 
   update-versions-branch:
     needs: [validate-and-plan, create-tags]

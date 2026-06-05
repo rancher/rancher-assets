@@ -4,6 +4,7 @@ SHELL := /bin/bash
 DOCKERFILES_DIR := dockerfiles
 VERSION ?=
 CHART_MAJOR ?=
+PUSH ?= false
 
 # Fork-friendly configuration - override these for your fork
 REGISTRY ?= ghcr.io
@@ -13,7 +14,7 @@ SOURCE_REPO ?= rancher/rancher-assets
 IMAGE_REPO ?= $(REGISTRY)/$(ORG)/$(REPO)
 TARGET_PLATFORMS ?= linux/amd64,linux/arm64
 
-.PHONY: help generate verify build build-all build-release push-all vendor-update
+.PHONY: help generate verify build build-all build-release push-image push-all vendor-update
 
 help: ## Show this help message
 	@echo "Rancher Assets Build System"
@@ -136,6 +137,44 @@ build: ## Build chart image (requires CHART_MAJOR and VERSION)
 		. && \
 	echo "" && \
 	echo "✅ Build complete: $(IMAGE_REPO):$(VERSION)"
+
+push-image: ## Push image (for use with ecm-distro-tools)
+	@if [ -z "$(CHART_MAJOR)" ] || [ -z "$(VERSION)" ]; then \
+		echo "❌ Error: CHART_MAJOR and VERSION required"; \
+		exit 1; \
+	fi
+	@if echo "$(VERSION)" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		BUILD_TYPE=prod; \
+	else \
+		BUILD_TYPE=dev; \
+	fi; \
+	\
+	RANCHER_BRANCH=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".rancher-branch" config.yaml 2>/dev/null); \
+	CHART_BRANCH=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.charts.branch" lock.yaml 2>/dev/null); \
+	PARTNER_BRANCH=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.partner.branch" lock.yaml 2>/dev/null); \
+	RKE2_BRANCH=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.rke2.branch" lock.yaml 2>/dev/null); \
+	CHART_COMMIT=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.charts.commit" lock.yaml 2>/dev/null); \
+	PARTNER_COMMIT=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.partner.commit" lock.yaml 2>/dev/null); \
+	RKE2_COMMIT=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.rke2.commit" lock.yaml 2>/dev/null); \
+	\
+	docker buildx build \
+		--file "$(DOCKERFILES_DIR)/Dockerfile.$(CHART_MAJOR)" \
+		--platform "$(TARGET_PLATFORMS)" \
+		--build-arg BUILD_TYPE=$$BUILD_TYPE \
+		--build-arg CHART_BRANCH=$$CHART_BRANCH \
+		--build-arg PARTNER_BRANCH=$$PARTNER_BRANCH \
+		--build-arg RKE2_BRANCH=$$RKE2_BRANCH \
+		--build-arg CHART_COMMIT=$$CHART_COMMIT \
+		--build-arg PARTNER_COMMIT=$$PARTNER_COMMIT \
+		--build-arg RKE2_COMMIT=$$RKE2_COMMIT \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
+		--build-arg BUILD_DATE=$(BUILD_DATE) \
+		--build-arg TARGET_BRANCH=$$RANCHER_BRANCH \
+		--build-arg BUILD_URL=$(BUILD_URL) \
+		--tag "$(IMAGE_REPO):$(VERSION)" \
+		--push \
+		.
 
 build-all: ## Build all chart versions from lock.yaml with auto-generated versions
 	@echo "Building all chart versions from lock.yaml"

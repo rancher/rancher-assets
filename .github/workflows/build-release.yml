@@ -20,6 +20,7 @@ jobs:
       version: ${{ steps.parse.outputs.version }}
       major: ${{ steps.parse.outputs.major }}
       build_type: ${{ steps.parse.outputs.build_type }}
+      release_id: ${{ steps.release.outputs.release_id }}
     steps:
       - name: Parse tag
         id: parse
@@ -41,15 +42,25 @@ jobs:
           echo "major=$MAJOR" >> $GITHUB_OUTPUT
           echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
 
+      - name: Get release ID
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${{ steps.parse.outputs.version }}
+          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${VERSION} --jq '.id')
+          echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
+
   build-and-push:
     needs: parse-tag
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -58,28 +69,30 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
-        run: |
-          make build \
-            REGISTRY=${{ env.REGISTRY }} \
-            ORG=${{ github.repository_owner }} \
-            REPO=${{ env.REPO }} \
-            CHART_MAJOR=${{ needs.parse-tag.outputs.major }} \
-            VERSION=${{ needs.parse-tag.outputs.version }} \
-            TARGET_PLATFORMS=linux/amd64,linux/arm64
-
-          docker push "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${{ needs.parse-tag.outputs.version }}"
-
-      - name: Generate image metadata
-        run: |
-          docker inspect "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${{ needs.parse-tag.outputs.version }}" \
-            --format='{{json .Config.Labels}}' | jq . > image-labels.json
-
-      - name: Upload image metadata
-        uses: actions/upload-artifact@v4
+      - name: Build and push to GHCR
+        uses: rancher/ecm-distro-tools/actions/publish-image@master
         with:
-          name: image-metadata-${{ needs.parse-tag.outputs.major }}
-          path: image-labels.json
+          image: ${{ env.REPO }}
+          tag: ${{ needs.parse-tag.outputs.version }}
+          platforms: linux/amd64,linux/arm64
+
+          push-to-public: true
+          public-registry: ghcr.io
+          public-repo: ${{ github.repository_owner }}
+          public-username: ${{ github.repository_owner }}
+          public-password: ${{ secrets.GITHUB_TOKEN }}
+
+          push-to-prime: false
+
+          make-target: push-image
+        env:
+          CHART_MAJOR: ${{ needs.parse-tag.outputs.major }}
+          VERSION: ${{ needs.parse-tag.outputs.version }}
+          GIT_COMMIT: ${{ github.sha }}
+          BUILD_DATE: ${{ github.event.head_commit.timestamp }}
+          BUILD_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TARGET_PLATFORMS: linux/amd64,linux/arm64
+          IMAGE_REPO: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}
 
   create-rancher-pr:
     needs: [parse-tag, build-and-push]
@@ -113,59 +126,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RANCHER_REPO_TOKEN }}
 
-  create-github-release:
+  publish-release:
     needs: [parse-tag, build-and-push]
     if: success()
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download image metadata
-        uses: actions/download-artifact@v4
+      - name: Publish release (undraft)
+        uses: actions/github-script@v7
         with:
-          name: image-metadata-${{ needs.parse-tag.outputs.major }}
-
-      - name: Create GitHub Release
-        run: |
-          VERSION="${{ needs.parse-tag.outputs.version }}"
-          MAJOR="${{ needs.parse-tag.outputs.major }}"
-          BUILD_TYPE="${{ needs.parse-tag.outputs.build_type }}"
-          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${VERSION}"
-
-          if [ "$BUILD_TYPE" = "prod" ]; then
-            RELEASE_NAME="Rancher Assets ${VERSION}"
-            PRERELEASE_FLAG=""
-          else
-            RELEASE_NAME="Rancher Assets ${VERSION} (Pre-release)"
-            PRERELEASE_FLAG="--prerelease"
-          fi
-
-          # Extract labels for release notes
-          CHART_BRANCH=$(jq -r '.\"io.rancher.charts.branch\"' image-labels.json)
-          CHART_COMMIT=$(jq -r '.\"io.rancher.charts.commit\"' image-labels.json)
-          PARTNER_BRANCH=$(jq -r '.\"io.rancher.partner.branch\"' image-labels.json)
-          PARTNER_COMMIT=$(jq -r '.\"io.rancher.partner.commit\"' image-labels.json)
-          RKE2_BRANCH=$(jq -r '.\"io.rancher.rke2.branch\"' image-labels.json)
-          RKE2_COMMIT=$(jq -r '.\"io.rancher.rke2.commit\"' image-labels.json)
-          TARGET_BRANCH=$(jq -r '.\"io.rancher.target-branch\"' image-labels.json)
-
-          RELEASE_NOTES=$(.github/scripts/generate-release-notes.sh \
-            "$VERSION" \
-            "$MAJOR" \
-            "$BUILD_TYPE" \
-            "$IMAGE" \
-            "$TARGET_BRANCH" \
-            "$CHART_BRANCH" \
-            "$CHART_COMMIT" \
-            "$PARTNER_BRANCH" \
-            "$PARTNER_COMMIT" \
-            "$RKE2_BRANCH" \
-            "$RKE2_COMMIT")
-
-          gh release create "${VERSION}" \
-            --title "${RELEASE_NAME}" \
-            --notes "$RELEASE_NOTES" \
-            ${PRERELEASE_FLAG}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.parse-tag.outputs.release_id }},
+              draft: false
+            });
+            console.log('Release ${{ needs.parse-tag.outputs.version }} published successfully!');
