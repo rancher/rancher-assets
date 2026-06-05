@@ -45,16 +45,6 @@ jobs:
   build-and-push:
     needs: parse-tag
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - tag-suffix: ""
-            platforms: linux/amd64,linux/arm64
-          - tag-suffix: "-amd64"
-            platforms: linux/amd64
-          - tag-suffix: "-arm64"
-            platforms: linux/arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,19 +62,17 @@ jobs:
         run: |
           make build \
             CHART_MAJOR=${{ needs.parse-tag.outputs.major }} \
-            VERSION=${{ needs.parse-tag.outputs.version }}${{ matrix.tag-suffix }} \
-            TARGET_PLATFORMS=${{ matrix.platforms }}
+            VERSION=${{ needs.parse-tag.outputs.version }} \
+            TARGET_PLATFORMS=linux/amd64,linux/arm64
 
-          docker push "${REGISTRY}/${ORG}/${REPO}:${{ needs.parse-tag.outputs.version }}${{ matrix.tag-suffix }}"
+          docker push "${REGISTRY}/${ORG}/${REPO}:${{ needs.parse-tag.outputs.version }}"
 
       - name: Generate image metadata
-        if: matrix.tag-suffix == ''
         run: |
           docker inspect "${REGISTRY}/${ORG}/${REPO}:${{ needs.parse-tag.outputs.version }}" \
             --format='{{json .Config.Labels}}' | jq . > image-labels.json
 
       - name: Upload image metadata
-        if: matrix.tag-suffix == ''
         uses: actions/upload-artifact@v4
         with:
           name: image-metadata-${{ needs.parse-tag.outputs.major }}
@@ -185,10 +173,8 @@ ${REGISTRY}/${ORG}/${REPO}:${VERSION}
 | rancher/partner-charts | ${PARTNER_BRANCH} | \`${PARTNER_COMMIT:0:8}\` |
 | rancher/rke2-charts | ${RKE2_BRANCH} | \`${RKE2_COMMIT:0:8}\` |
 
-### Multi-arch Images
-- \`${REGISTRY}/${ORG}/${REPO}:${VERSION}\` (linux/amd64, linux/arm64)
-- \`${REGISTRY}/${ORG}/${REPO}:${VERSION}-amd64\` (linux/amd64)
-- \`${REGISTRY}/${ORG}/${REPO}:${VERSION}-arm64\` (linux/arm64)
+### Multi-arch Image
+\`${REGISTRY}/${ORG}/${REPO}:${VERSION}\` (linux/amd64, linux/arm64)
 " \
             ${PRERELEASE_FLAG}
         env:

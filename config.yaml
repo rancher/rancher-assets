@@ -2,6 +2,10 @@
 # Defines chart major versions and their upstream source configurations
 # This file is STATIC - only changes when adding new Rancher minors or updating base images
 
+# Base images (BCI versions)
+base-image:
+  bci-version: "16.0"
+
 chart-versions:
   # Charts v0.x series for Rancher 2.14.x
   v0:
@@ -26,10 +30,6 @@ chart-versions:
       charts-branch: dev-v2.15
       partner-branch: main
       rke2-branch: main
-
-# Base images (BCI versions)
-base-image:
-  bci-version: "16.0"
 
 # Upstream chart repositories
 # Each repo has a URL and a catalog path (with integrity hash)

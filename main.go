@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"sort"
@@ -31,6 +33,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "changed-majors":
+		if err := changedMajorsCommand(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -42,7 +49,9 @@ func printUsage() {
 	fmt.Println("Usage: rancher-assets <command>")
 	fmt.Println("")
 	fmt.Println("Commands:")
-	fmt.Println("  generate    Generate Dockerfiles and update lock.yaml")
+	fmt.Println("  generate             Generate Dockerfiles and update lock.yaml")
+	fmt.Println("  changed-majors       Detect chart majors with upstream ref changes")
+	fmt.Println("                       Flags: --from=<commit> --to=<commit>")
 }
 
 func generateCommand() error {
@@ -173,5 +182,57 @@ func generateCommand() error {
 	fmt.Printf("  - %s\n", lockPath)
 	fmt.Println("\nReview changes with: git diff dockerfiles/ lock.yaml")
 
+	return nil
+}
+
+func changedMajorsCommand() error {
+	// Parse flags
+	fs := flag.NewFlagSet("changed-majors", flag.ExitOnError)
+	fromCommit := fs.String("from", "", "From commit (required)")
+	toCommit := fs.String("to", "", "To commit (required)")
+	verbose := fs.Bool("verbose", false, "Show detailed change information")
+
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		return err
+	}
+
+	if *fromCommit == "" || *toCommit == "" {
+		return fmt.Errorf("both --from and --to are required")
+	}
+
+	// Get changed majors
+	changed, err := lockfile.ChangedMajors(*fromCommit, *toCommit)
+	if err != nil {
+		return err
+	}
+
+	// Ensure we have an empty array instead of nil for JSON marshaling
+	if changed == nil {
+		changed = []string{}
+	}
+
+	// Sort for consistent output
+	sort.Strings(changed)
+
+	if *verbose {
+		// Verbose output - show what changed
+		if len(changed) == 0 {
+			fmt.Println("No chart majors with upstream ref changes detected")
+			fmt.Println("(Only timestamp changes in lock.yaml)")
+		} else {
+			fmt.Printf("Changed chart majors (%d):\n", len(changed))
+			for _, major := range changed {
+				fmt.Printf("  - %s\n", major)
+			}
+		}
+	}
+
+	// Always output JSON array (for workflow consumption)
+	output, err := json.Marshal(changed)
+	if err != nil {
+		return fmt.Errorf("failed to marshal output: %w", err)
+	}
+
+	fmt.Println(string(output))
 	return nil
 }
