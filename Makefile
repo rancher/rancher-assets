@@ -4,12 +4,16 @@ SHELL := /bin/bash
 DOCKERFILES_DIR := dockerfiles
 VERSION ?=
 CHART_MAJOR ?=
+
+# Fork-friendly configuration - override these for your fork
+REGISTRY ?= docker.io
 ORG ?= rancher
 REPO ?= rancher-charts
-IMAGE_REPO ?= docker.io/$(ORG)/$(REPO)
+SOURCE_REPO ?= rancher/rancher-assets
+IMAGE_REPO ?= $(REGISTRY)/$(ORG)/$(REPO)
 TARGET_PLATFORMS ?= linux/amd64,linux/arm64
 
-.PHONY: help generate verify build build-all build-release
+.PHONY: help generate verify build build-all build-release push-all
 
 help: ## Show this help message
 	@echo "Rancher Assets Build System"
@@ -22,7 +26,12 @@ help: ## Show this help message
 	@echo "  make generate"
 	@echo "  make build CHART_MAJOR=v1 VERSION=v1.0.0-rc.1"
 	@echo "  make build-all              # Dev builds with auto-generated versions"
+	@echo "  make push-all               # Build and push all to registry"
 	@echo "  make build-release          # Local debug - builds latest-stable from lock.yaml"
+	@echo ""
+	@echo "Fork-friendly overrides:"
+	@echo "  make push-all REGISTRY=ghcr.io ORG=myorg REPO=my-charts SOURCE_REPO=myorg/rancher-assets"
+	@echo "  Or set in environment: export REGISTRY=ghcr.io ORG=myorg"
 
 generate: ## Generate Dockerfiles from config.yaml
 	@echo "Generating Dockerfiles and updating lock.yaml..."
@@ -109,7 +118,7 @@ build: ## Build chart image (requires CHART_MAJOR and VERSION)
 		--build-arg GIT_COMMIT=$$(git rev-parse HEAD) \
 		--build-arg BUILD_DATE=$$(date -u +%Y-%m-%dT%H:%M:%SZ) \
 		--build-arg TARGET_BRANCH=$$RANCHER_BRANCH \
-		--build-arg BUILD_URL="https://github.com/rancher/rancher-assets" \
+		--build-arg BUILD_URL="https://github.com/$(SOURCE_REPO)" \
 		--tag "$(IMAGE_REPO):$(VERSION)" \
 		--load \
 		. && \
@@ -142,6 +151,73 @@ build-all: ## Build all chart versions from lock.yaml with auto-generated versio
 	done; \
 	echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
 	echo "✅ All builds complete"; \
+	echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+push-all: ## Build and push all chart versions to registry
+	@echo "⚠️  WARNING: This will push images to $(IMAGE_REPO)"
+	@echo "⚠️  Make sure you are authenticated to $(REGISTRY)"
+	@echo ""
+	@read -p "Continue? [y/N] " -n 1 -r; \
+	echo ""; \
+	if [[ ! $$REPLY =~ ^[Yy]$$ ]]; then \
+		echo "Aborted."; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "Building and pushing all chart versions from lock.yaml"
+	@echo ""
+	@CHART_MAJORS=$$(yq eval '.chart-versions | keys | .[]' lock.yaml); \
+	if [ -z "$$CHART_MAJORS" ]; then \
+		echo "❌ Error: No chart versions found in lock.yaml"; \
+		exit 1; \
+	fi; \
+	BUILD_DATE=$$(date -u +%Y%m%d); \
+	GIT_SHORT=$$(git rev-parse --short HEAD); \
+	for major in $$CHART_MAJORS; do \
+		echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
+		echo "Building and pushing $$major"; \
+		echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
+		MAJOR_NUM=$${major#v}; \
+		VERSION="$$major.0.0-dev.$$BUILD_DATE.$$GIT_SHORT"; \
+		echo "Version: $$VERSION"; \
+		echo "Target: $(IMAGE_REPO):$$VERSION"; \
+		echo ""; \
+		\
+		RANCHER_BRANCH=$$(yq eval ".chart-versions.\"$$major\".rancher-branch" config.yaml 2>/dev/null); \
+		CHART_BRANCH=$$(yq eval ".chart-versions.\"$$major\".upstream-refs.dev.charts.branch" lock.yaml 2>/dev/null); \
+		PARTNER_BRANCH=$$(yq eval ".chart-versions.\"$$major\".upstream-refs.dev.partner.branch" lock.yaml 2>/dev/null); \
+		RKE2_BRANCH=$$(yq eval ".chart-versions.\"$$major\".upstream-refs.dev.rke2.branch" lock.yaml 2>/dev/null); \
+		CHART_COMMIT=$$(yq eval ".chart-versions.\"$$major\".upstream-refs.dev.charts.commit" lock.yaml 2>/dev/null); \
+		PARTNER_COMMIT=$$(yq eval ".chart-versions.\"$$major\".upstream-refs.dev.partner.commit" lock.yaml 2>/dev/null); \
+		RKE2_COMMIT=$$(yq eval ".chart-versions.\"$$major\".upstream-refs.dev.rke2.commit" lock.yaml 2>/dev/null); \
+		\
+		docker buildx build \
+			--file "$(DOCKERFILES_DIR)/Dockerfile.$$major" \
+			--platform "$(TARGET_PLATFORMS)" \
+			--build-arg BUILD_TYPE=dev \
+			--build-arg CHART_BRANCH=$$CHART_BRANCH \
+			--build-arg PARTNER_BRANCH=$$PARTNER_BRANCH \
+			--build-arg RKE2_BRANCH=$$RKE2_BRANCH \
+			--build-arg CHART_COMMIT=$$CHART_COMMIT \
+			--build-arg PARTNER_COMMIT=$$PARTNER_COMMIT \
+			--build-arg RKE2_COMMIT=$$RKE2_COMMIT \
+			--build-arg VERSION=$$VERSION \
+			--build-arg GIT_COMMIT=$$(git rev-parse HEAD) \
+			--build-arg BUILD_DATE=$$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+			--build-arg TARGET_BRANCH=$$RANCHER_BRANCH \
+			--build-arg BUILD_URL="https://github.com/$(SOURCE_REPO)" \
+			--tag "$(IMAGE_REPO):$$VERSION" \
+			--push \
+			.; \
+		if [ $$? -ne 0 ]; then \
+			echo "❌ Push failed for $$major"; \
+			exit 1; \
+		fi; \
+		echo "✅ Pushed: $(IMAGE_REPO):$$VERSION"; \
+		echo ""; \
+	done; \
+	echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
+	echo "✅ All images pushed successfully"; \
 	echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 build-release: ## Build release versions from lock.yaml (LOCAL DEBUG ONLY - use GHA for real releases)
