@@ -99,24 +99,17 @@ jobs:
       - name: Create PR to rancher/rancher
         run: |
           VERSION="${{ needs.parse-tag.outputs.version }}"
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${VERSION}"
+
+          PR_BODY=$(.github/scripts/generate-rancher-pr-body.sh \
+            "$VERSION" \
+            "${{ needs.parse-tag.outputs.major }}" \
+            "$IMAGE")
 
           gh pr create --repo rancher/rancher \
             --base ${{ steps.rancher.outputs.branch }} \
             --title "Update to rancher-assets ${VERSION}" \
-            --body "## Rancher Assets Update
-
-**Version**: \`${VERSION}\`
-**Chart Major**: \`${{ needs.parse-tag.outputs.major }}\`
-**Image**: \`${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${VERSION}\`
-
-### Changes
-This updates the rancher-assets image to ${VERSION}.
-
-### Updates Required
-- [ ] Update \`build.yaml\`: \`defaultChartsImage: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${VERSION}\`
-- [ ] Run \`go generate\` to update chart values
-
-🤖 Automated PR from rancher-assets release workflow"
+            --body "$PR_BODY"
         env:
           GH_TOKEN: ${{ secrets.RANCHER_REPO_TOKEN }}
 
@@ -138,6 +131,7 @@ This updates the rancher-assets image to ${VERSION}.
           VERSION="${{ needs.parse-tag.outputs.version }}"
           MAJOR="${{ needs.parse-tag.outputs.major }}"
           BUILD_TYPE="${{ needs.parse-tag.outputs.build_type }}"
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${VERSION}"
 
           if [ "$BUILD_TYPE" = "prod" ]; then
             RELEASE_NAME="Rancher Assets ${VERSION}"
@@ -156,29 +150,22 @@ This updates the rancher-assets image to ${VERSION}.
           RKE2_COMMIT=$(jq -r '.\"io.rancher.rke2.commit\"' image-labels.json)
           TARGET_BRANCH=$(jq -r '.\"io.rancher.target-branch\"' image-labels.json)
 
+          RELEASE_NOTES=$(.github/scripts/generate-release-notes.sh \
+            "$VERSION" \
+            "$MAJOR" \
+            "$BUILD_TYPE" \
+            "$IMAGE" \
+            "$TARGET_BRANCH" \
+            "$CHART_BRANCH" \
+            "$CHART_COMMIT" \
+            "$PARTNER_BRANCH" \
+            "$PARTNER_COMMIT" \
+            "$RKE2_BRANCH" \
+            "$RKE2_COMMIT")
+
           gh release create "${VERSION}" \
             --title "${RELEASE_NAME}" \
-            --notes "## Rancher Assets ${VERSION}
-
-**Chart Major**: ${MAJOR}
-**Target Rancher Branch**: ${TARGET_BRANCH}
-**Build Type**: ${BUILD_TYPE}
-
-### Image
-\`\`\`
-${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${VERSION}
-\`\`\`
-
-### Upstream Sources
-| Repository | Branch | Commit |
-|------------|--------|--------|
-| rancher/charts | ${CHART_BRANCH} | \`${CHART_COMMIT:0:8}\` |
-| rancher/partner-charts | ${PARTNER_BRANCH} | \`${PARTNER_COMMIT:0:8}\` |
-| rancher/rke2-charts | ${RKE2_BRANCH} | \`${RKE2_COMMIT:0:8}\` |
-
-### Multi-arch Image
-\`${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${VERSION}\` (linux/amd64, linux/arm64)
-" \
+            --notes "$RELEASE_NOTES" \
             ${PRERELEASE_FLAG}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

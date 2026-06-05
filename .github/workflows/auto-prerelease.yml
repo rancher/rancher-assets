@@ -166,39 +166,39 @@ jobs:
 
       - name: Create and push tag
         run: |
-          VERSION="${{ matrix.release.new_version }}"
-          MAJOR="${{ matrix.release.major }}"
-
-          echo "Creating auto prerelease tag $VERSION at ${{ needs.detect-changes.outputs.commit_sha }}"
+          echo "Creating auto prerelease tag ${{ matrix.release.new_version }} at ${{ needs.detect-changes.outputs.commit_sha }}"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git tag -a "$VERSION" -m "$(cat <<EOF
-Auto pre-release $VERSION
+          .github/scripts/create-prerelease-tag.sh \
+            "${{ matrix.release.new_version }}" \
+            "${{ matrix.release.major }}" \
+            "${{ matrix.release.current_stable }}" \
+            "${{ matrix.release.current_prerelease }}"
 
-Chart Major: $MAJOR
-Triggered by: push to main
-
-Current Stable: ${{ matrix.release.current_stable }}
-Current Prerelease: ${{ matrix.release.current_prerelease }}
-EOF
-          )"
-
-          git push origin "$VERSION"
+          git push origin "${{ matrix.release.new_version }}"
 
   update-versions-branch:
     needs: [detect-changes, plan-prereleases, create-tags]
     if: success()
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout main for scripts
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+
       - name: Checkout versions branch
         uses: actions/checkout@v4
         with:
           ref: versions
           fetch-depth: 1
+          path: versions
 
       - name: Update versions.yaml
+        working-directory: versions
         run: |
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -213,6 +213,7 @@ EOF
           done
 
       - name: Commit and push
+        working-directory: versions
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -224,12 +225,8 @@ EOF
             exit 0
           fi
 
-          git commit -m "$(cat <<EOF
-Auto-update prerelease versions
-
-Triggered by: push to main (${{ needs.detect-changes.outputs.commit_sha }})
-Changed majors: ${{ needs.detect-changes.outputs.changed_majors }}
-EOF
-          )"
+          ../main/.github/scripts/update-versions-auto.sh \
+            "${{ needs.detect-changes.outputs.commit_sha }}" \
+            "${{ needs.detect-changes.outputs.changed_majors }}"
 
           git push origin versions

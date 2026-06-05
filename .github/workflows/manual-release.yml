@@ -221,17 +221,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git tag -a "$VERSION" -m "$(cat <<EOF
-Release $VERSION
-
-Chart Major: $MAJOR
-Release Type: ${{ github.event.inputs.release_type }}
-Bump Type: ${{ github.event.inputs.bump_type }}
-
-Current Stable: ${{ matrix.release.current_stable }}
-Current Prerelease: ${{ matrix.release.current_prerelease }}
-EOF
-          )"
+          .github/scripts/create-release-tag.sh \
+            "$VERSION" \
+            "$MAJOR" \
+            "${{ github.event.inputs.release_type }}" \
+            "${{ github.event.inputs.bump_type }}" \
+            "${{ matrix.release.current_stable }}" \
+            "${{ matrix.release.current_prerelease }}"
 
           git push origin "$VERSION"
 
@@ -240,13 +236,21 @@ EOF
     if: success()
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout main for scripts
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+
       - name: Checkout versions branch
         uses: actions/checkout@v4
         with:
           ref: versions
           fetch-depth: 1
+          path: versions
 
       - name: Update versions.yaml
+        working-directory: versions
         run: |
           RELEASE_TYPE="${{ github.event.inputs.release_type }}"
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -262,6 +266,7 @@ EOF
           done
 
       - name: Commit and push
+        working-directory: versions
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -273,14 +278,10 @@ EOF
             exit 0
           fi
 
-          git commit -m "$(cat <<EOF
-Update versions after manual release
-
-Release Type: ${{ github.event.inputs.release_type }}
-Bump Type: ${{ github.event.inputs.bump_type }}
-Chart Majors: ${{ needs.validate-and-plan.outputs.chart_majors }}
-Commit: ${{ needs.validate-and-plan.outputs.commit_sha }}
-EOF
-          )"
+          ../main/.github/scripts/update-versions-manual.sh \
+            "${{ github.event.inputs.release_type }}" \
+            "${{ github.event.inputs.bump_type }}" \
+            "${{ needs.validate-and-plan.outputs.chart_majors }}" \
+            "${{ needs.validate-and-plan.outputs.commit_sha }}"
 
           git push origin versions
