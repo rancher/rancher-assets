@@ -65,23 +65,27 @@ func ScanCharts(config ExportConfig) ([]ImageReference, error) {
 
 // findCatalogDir finds the catalog directory which might have a hash suffix
 func findCatalogDir(basePath string) (string, error) {
-	// Check if basePath itself exists
-	if info, err := os.Stat(basePath); err == nil && info.IsDir() {
+	// Check if basePath/index.yaml exists (direct path)
+	if _, err := os.Stat(filepath.Join(basePath, "index.yaml")); err == nil {
 		return basePath, nil
 	}
 
-	// Check parent directory for hash-suffixed directories
-	parent := filepath.Dir(basePath)
-	base := filepath.Base(basePath)
+	// Check if basePath exists and has a hash-suffixed subdirectory
+	if info, err := os.Stat(basePath); err == nil && info.IsDir() {
+		entries, err := os.ReadDir(basePath)
+		if err != nil {
+			return "", err
+		}
 
-	entries, err := os.ReadDir(parent)
-	if err != nil {
-		return "", err
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() && strings.HasPrefix(entry.Name(), base) {
-			return filepath.Join(parent, entry.Name()), nil
+		// Look for first subdirectory (should be the hash)
+		for _, entry := range entries {
+			if entry.IsDir() {
+				subPath := filepath.Join(basePath, entry.Name())
+				// Check if index.yaml exists in this subdirectory
+				if _, err := os.Stat(filepath.Join(subPath, "index.yaml")); err == nil {
+					return subPath, nil
+				}
+			}
 		}
 	}
 

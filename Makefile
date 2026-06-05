@@ -14,7 +14,7 @@ SOURCE_REPO ?= rancher/rancher-assets
 IMAGE_REPO ?= $(REGISTRY)/$(ORG)/$(REPO)
 TARGET_PLATFORMS ?= linux/amd64,linux/arm64
 
-.PHONY: help generate verify export-images build build-all build-release push-image push-all vendor-update release-auto release-manual
+.PHONY: help generate verify export-images build build-all build-release build-release-with-lists push-image push-all vendor-update release-auto release-manual
 
 help: ## Show this help message
 	@echo "Rancher Assets Build System"
@@ -26,10 +26,12 @@ help: ## Show this help message
 	@echo "Examples:"
 	@echo "  make generate"
 	@echo "  make build CHART_MAJOR=v1 VERSION=v1.0.0-rc.1"
-	@echo "  make build-all              # Dev builds with auto-generated versions"
-	@echo "  make push-all               # Build and push all to registry"
-	@echo "  make build-release          # Local debug - builds latest-stable from lock.yaml"
-	@echo "  make release-auto           # Create auto pre-release tags"
+	@echo "  make build-all                    # Dev builds with auto-generated versions"
+	@echo "  make push-all                     # Build and push all to registry"
+	@echo "  make build-release                # Local debug - builds latest-stable from lock.yaml"
+	@echo "  make build-release-with-lists     # Local debug - builds + generates image lists"
+	@echo "  make export-images CHART_MAJOR=v1 VERSION=v1.0.0  # Generate image lists"
+	@echo "  make release-auto                 # Create auto pre-release tags"
 	@echo "  make release-manual BUMP=minor RELEASE=prerelease"
 	@echo ""
 	@echo "Fork-friendly overrides:"
@@ -52,43 +54,24 @@ verify: ## Verify no uncommitted changes in generated files
 	fi
 	@echo "✅ Verified: all generated files are committed"
 
-export-images: ## Generate image lists from chart catalogs (requires CHART_MAJOR and VERSION)
+export-images: ## Generate image lists from chart catalogs (requires CHART_MAJOR and VERSION, optional: LOCAL=true for local builds)
 	@if [ -z "$(CHART_MAJOR)" ] || [ -z "$(VERSION)" ]; then \
 		echo "❌ Error: CHART_MAJOR and VERSION required"; \
-		echo "Usage: make export-images CHART_MAJOR=v1 VERSION=v1.0.0"; \
+		echo "Usage: make export-images CHART_MAJOR=v1 VERSION=v1.0.0 [LOCAL=true]"; \
 		exit 1; \
 	fi
-	@echo "Generating image lists for $(CHART_MAJOR) $(VERSION)..."
-	@# Pull the published image
-	docker pull $(IMAGE_REPO):$(VERSION)
-	@# Extract chart catalogs
-	@CONTAINER_ID=$$(docker create $(IMAGE_REPO):$(VERSION)); \
-	rm -rf /tmp/rancher-assets-charts-$(VERSION); \
-	mkdir -p /tmp/rancher-assets-charts-$(VERSION); \
-	docker cp $$CONTAINER_ID:/var/lib/rancher-data/local-catalogs/v2 /tmp/rancher-assets-charts-$(VERSION)/; \
-	docker rm $$CONTAINER_ID
-	@# Run image list generator
-	@mkdir -p dist/$(VERSION)
-	@go run main.go export-images \
-		--charts-path /tmp/rancher-assets-charts-$(VERSION)/v2 \
-		--version $(VERSION) \
-		--output-dir dist/$(VERSION)
-	@echo ""
-	@echo "✅ Image lists generated in dist/$(VERSION)/"
-	@echo ""
-	@ls -lh dist/$(VERSION)/
+	@LOCAL_FLAG=""; \
+	if [ "$(LOCAL)" = "true" ]; then \
+		LOCAL_FLAG="--local"; \
+	fi; \
+	./scripts/export-image-lists.sh \
+		--image "$(IMAGE_REPO):$(VERSION)" \
+		--version "$(VERSION)" \
+		--output-dir "dist/$(VERSION)" \
+		$$LOCAL_FLAG
 
 vendor-update: ## Update Go dependencies and vendor them
-	@echo "Updating Go dependencies..."
-	go get -u ./...
-	@echo "Tidying go.mod..."
-	go mod tidy
-	@echo "Vendoring dependencies..."
-	go mod vendor
-	@echo "✅ Dependencies updated and vendored"
-	@echo ""
-	@echo "Review changes with: git diff go.mod go.sum vendor/"
-	@echo "Commit with: git add go.mod go.sum vendor/ && git commit -m 'Update Go dependencies'"
+	@./scripts/vendor-update.sh
 
 build: ## Build chart image (requires CHART_MAJOR and VERSION)
 	@if [ -z "$(CHART_MAJOR)" ] || [ -z "$(VERSION)" ]; then \
@@ -99,37 +82,14 @@ build: ## Build chart image (requires CHART_MAJOR and VERSION)
 		echo "  make build CHART_MAJOR=v1 VERSION=v1.0.0       # Prod build"; \
 		exit 1; \
 	fi
-	@# Detect build type from version tag (clean semver = prod, anything else = dev)
-	@if echo "$(VERSION)" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$'; then \
-		BUILD_TYPE=prod; \
-	else \
-		BUILD_TYPE=dev; \
-	fi; \
+	@if [ ! -f "$(DOCKERFILES_DIR)/Dockerfile.$(CHART_MAJOR)" ]; then \
+		echo "❌ Error: Dockerfile not found: $(DOCKERFILES_DIR)/Dockerfile.$(CHART_MAJOR)"; \
+		echo "Run 'make generate' first"; \
+		exit 1; \
+	fi
+	@eval $$(./scripts/get-build-vars.sh --major $(CHART_MAJOR) --version $(VERSION) --format shell); \
 	echo "Building $(CHART_MAJOR) version $(VERSION) ($$BUILD_TYPE)"; \
 	echo ""; \
-	\
-	RANCHER_BRANCH=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".rancher-branch" config.yaml 2>/dev/null); \
-	\
-	CHART_BRANCH=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.charts.branch" lock.yaml 2>/dev/null); \
-	PARTNER_BRANCH=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.partner.branch" lock.yaml 2>/dev/null); \
-	RKE2_BRANCH=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.rke2.branch" lock.yaml 2>/dev/null); \
-	\
-	CHART_COMMIT=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.charts.commit" lock.yaml 2>/dev/null); \
-	PARTNER_COMMIT=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.partner.commit" lock.yaml 2>/dev/null); \
-	RKE2_COMMIT=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.rke2.commit" lock.yaml 2>/dev/null); \
-	\
-	if [ "$$CHART_BRANCH" = "null" ] || [ -z "$$CHART_BRANCH" ]; then \
-		echo "❌ Error: $$BUILD_TYPE refs not found in lock.yaml for $(CHART_MAJOR)"; \
-		echo "Run 'make generate' first"; \
-		exit 1; \
-	fi; \
-	\
-	if [ "$$CHART_COMMIT" = "null" ] || [ -z "$$CHART_COMMIT" ]; then \
-		echo "❌ Error: $$BUILD_TYPE commits not found in lock.yaml for $(CHART_MAJOR)"; \
-		echo "Run 'make generate' first"; \
-		exit 1; \
-	fi; \
-	\
 	echo "Configuration:"; \
 	echo "  Build type: $$BUILD_TYPE"; \
 	echo "  Charts branch: $$CHART_BRANCH (commit: $${CHART_COMMIT:0:8})"; \
@@ -137,13 +97,6 @@ build: ## Build chart image (requires CHART_MAJOR and VERSION)
 	echo "  RKE2 branch: $$RKE2_BRANCH (commit: $${RKE2_COMMIT:0:8})"; \
 	echo "  Rancher branch: $$RANCHER_BRANCH"; \
 	echo ""; \
-	\
-	if [ ! -f "$(DOCKERFILES_DIR)/Dockerfile.$(CHART_MAJOR)" ]; then \
-		echo "❌ Error: Dockerfile not found: $(DOCKERFILES_DIR)/Dockerfile.$(CHART_MAJOR)"; \
-		echo "Run 'make generate' first"; \
-		exit 1; \
-	fi; \
-	\
 	echo "Building image..."; \
 	docker buildx build \
 		--file "$(DOCKERFILES_DIR)/Dockerfile.$(CHART_MAJOR)" \
@@ -171,20 +124,7 @@ push-image: ## Push image (for use with ecm-distro-tools)
 		echo "❌ Error: CHART_MAJOR and VERSION required"; \
 		exit 1; \
 	fi
-	@if echo "$(VERSION)" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$'; then \
-		BUILD_TYPE=prod; \
-	else \
-		BUILD_TYPE=dev; \
-	fi; \
-	\
-	RANCHER_BRANCH=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".rancher-branch" config.yaml 2>/dev/null); \
-	CHART_BRANCH=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.charts.branch" lock.yaml 2>/dev/null); \
-	PARTNER_BRANCH=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.partner.branch" lock.yaml 2>/dev/null); \
-	RKE2_BRANCH=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.rke2.branch" lock.yaml 2>/dev/null); \
-	CHART_COMMIT=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.charts.commit" lock.yaml 2>/dev/null); \
-	PARTNER_COMMIT=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.partner.commit" lock.yaml 2>/dev/null); \
-	RKE2_COMMIT=$$(yq eval ".chart-versions.\"$(CHART_MAJOR)\".upstream-refs.$$BUILD_TYPE.rke2.commit" lock.yaml 2>/dev/null); \
-	\
+	@eval $$(./scripts/get-build-vars.sh --major $(CHART_MAJOR) --version $(VERSION) --format shell); \
 	docker buildx build \
 		--file "$(DOCKERFILES_DIR)/Dockerfile.$(CHART_MAJOR)" \
 		--platform "$(TARGET_PLATFORMS)" \
@@ -300,44 +240,10 @@ push-all: ## Build and push all chart versions to registry
 	echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 build-release: ## Build release versions from lock.yaml (LOCAL DEBUG ONLY - use GHA for real releases)
-	@echo "⚠️  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo "⚠️  LOCAL DEBUG BUILD - NOT FOR PRODUCTION RELEASES"
-	@echo "⚠️  Use GitHub Actions workflows for real releases"
-	@echo "⚠️  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo ""
-	@echo "Building release versions from lock.yaml..."
-	@echo ""
-	@CHART_MAJORS=$$(yq eval '.chart-versions | keys | .[]' lock.yaml); \
-	if [ -z "$$CHART_MAJORS" ]; then \
-		echo "❌ Error: No chart versions found in lock.yaml"; \
-		exit 1; \
-	fi; \
-	BUILT_COUNT=0; \
-	for major in $$CHART_MAJORS; do \
-		VERSION=$$(yq eval ".chart-versions.\"$$major\".latest-stable" lock.yaml); \
-		if [ "$$VERSION" = "null" ] || [ -z "$$VERSION" ]; then \
-			echo "⏭️  Skipping $$major (no latest-stable set)"; \
-			continue; \
-		fi; \
-		echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
-		echo "Building $$major at $$VERSION"; \
-		echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
-		$(MAKE) build CHART_MAJOR=$$major VERSION=$$VERSION; \
-		if [ $$? -ne 0 ]; then \
-			echo "❌ Build failed for $$major"; \
-			exit 1; \
-		fi; \
-		BUILT_COUNT=$$((BUILT_COUNT + 1)); \
-		echo ""; \
-	done; \
-	if [ $$BUILT_COUNT -eq 0 ]; then \
-		echo "⚠️  No releases built - no chart versions have latest-stable set"; \
-		exit 1; \
-	fi; \
-	echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
-	echo "✅ Built $$BUILT_COUNT release(s) - LOCAL DEBUG ONLY"; \
-	echo "⚠️  Remember: Use GitHub Actions for production releases"; \
-	echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@./scripts/build-releases.sh
+
+build-release-with-lists: ## Build releases and generate image lists (LOCAL DEBUG ONLY)
+	@./scripts/build-releases.sh --with-lists
 
 .PHONY: test
 test: ## Run tests
