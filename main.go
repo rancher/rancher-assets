@@ -9,6 +9,7 @@ import (
 
 	"github.com/rancher/rancher-assets/internal/config"
 	"github.com/rancher/rancher-assets/internal/generator"
+	"github.com/rancher/rancher-assets/internal/imagelist"
 	"github.com/rancher/rancher-assets/internal/lockfile"
 	"github.com/rancher/rancher-assets/internal/versions"
 )
@@ -44,6 +45,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "export-images":
+		if err := exportImagesCommand(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printUsage()
@@ -62,6 +68,8 @@ func printUsage() {
 	fmt.Println("                       Flags: --versions-file=<path> --type=<auto|manual>")
 	fmt.Println("                              --changed-majors=<json> (for auto)")
 	fmt.Println("                              --majors=<json> --bump=<minor|patch> --release=<stable|prerelease> (for manual)")
+	fmt.Println("  export-images        Generate image lists from chart catalogs")
+	fmt.Println("                       Flags: --charts-path=<path> --version=<version> --output-dir=<path>")
 }
 
 func generateCommand() error {
@@ -329,5 +337,49 @@ func planReleaseCommand() error {
 	}
 
 	fmt.Println(string(output))
+	return nil
+}
+
+func exportImagesCommand() error {
+	// Parse flags
+	fs := flag.NewFlagSet("export-images", flag.ExitOnError)
+	chartsPath := fs.String("charts-path", "", "Path to extracted chart catalogs (required)")
+	version := fs.String("version", "", "Chart image version being exported (required)")
+	outputDir := fs.String("output-dir", "", "Output directory for image lists (required)")
+
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		return err
+	}
+
+	if *chartsPath == "" || *version == "" || *outputDir == "" {
+		return fmt.Errorf("--charts-path, --version, and --output-dir are required")
+	}
+
+	config := imagelist.ExportConfig{
+		ChartsPath: *chartsPath,
+		Version:    *version,
+		OutputDir:  *outputDir,
+	}
+
+	fmt.Printf("Scanning chart catalogs for image references...\n")
+	fmt.Printf("  Charts path: %s\n", config.ChartsPath)
+	fmt.Printf("  Version: %s\n", config.Version)
+	fmt.Printf("  Output dir: %s\n\n", config.OutputDir)
+
+	// Scan charts for image references
+	refs, err := imagelist.ScanCharts(config)
+	if err != nil {
+		return fmt.Errorf("failed to scan charts: %w", err)
+	}
+
+	fmt.Printf("\nFound %d unique images\n", len(refs))
+
+	// Write image lists and scripts
+	if err := imagelist.WriteImageLists(refs, config); err != nil {
+		return fmt.Errorf("failed to write image lists: %w", err)
+	}
+
+	fmt.Println("\n✅ Image list export complete!")
+
 	return nil
 }

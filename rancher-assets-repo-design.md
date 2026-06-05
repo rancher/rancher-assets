@@ -20,11 +20,12 @@ This document defines the architecture for a new `rancher/rancher-assets` reposi
 4. [Repository Structure](#repository-structure)
 5. [Configuration System](#configuration-system)
 6. [Build System](#build-system)
-7. [Release Workflows](#release-workflows)
-8. [Head Builds](#head-builds)
-9. [Integration with Rancher](#integration-with-rancher)
-10. [Migration Path](#migration-path)
-11. [Appendix: Alternatives Considered](#appendix-alternatives-considered)
+7. [Image List Generation](#image-list-generation)
+8. [Release Workflows](#release-workflows)
+9. [Head Builds](#head-builds)
+10. [Integration with Rancher](#integration-with-rancher)
+11. [Migration Path](#migration-path)
+12. [Appendix: Alternatives Considered](#appendix-alternatives-considered)
 
 ---
 
@@ -138,7 +139,8 @@ rancher-assets/
 ├── internal/
 │   ├── config/              # Config loading and validation
 │   ├── generator/           # Dockerfile template rendering
-│   └── lockfile/            # Lock file management
+│   ├── lockfile/            # Lock file management
+│   └── imagelist/           # Image list extraction from charts
 │
 ├── dockerfiles/             # Generated (committed for auditability)
 │   ├── Dockerfile.v1
@@ -451,6 +453,234 @@ push: build ## Build and push
 test: ## Run tests
 	go test -v ./...
 ```
+
+---
+
+## Image List Generation
+
+### Overview
+
+For air-gapped deployments, Rancher needs lists of all container images referenced by the bundled Helm charts. The `rancher-assets` generator scans the built chart image and extracts these image references.
+
+**Key Differences from rancher/rancher**:
+- **Simpler scope**: Only scans charts (no KDM, system images, or external k8s distro images)
+- **No version filtering**: Scans all charts in the image (Rancher version constraints are handled at chart selection time)
+- **Standalone**: Doesn't require Rancher codebase dependencies
+
+### Implementation
+
+**Command**: `make export-images CHART_MAJOR=v1 VERSION=v1.0.0`
+
+**What it does**:
+1. Builds the charts image locally (or pulls published image)
+2. Extracts the three chart catalogs from the image
+3. Scans each chart's `index.yaml` and chart `.tgz` files
+4. Parses `values.yaml` from each chart for image references
+5. Generates output files (see below)
+
+### Generated Artifacts
+
+For each chart major version, the following files are generated:
+
+```
+rancher-charts-images.txt              # Linux image list
+rancher-charts-windows-images.txt      # Windows image list
+rancher-charts-images-sources.txt      # Linux images with source chart mapping
+rancher-charts-windows-images-sources.txt  # Windows images with source chart mapping
+rancher-charts-save-images.sh          # Script to save Linux images to tar
+rancher-charts-load-images.sh          # Script to load Linux images from tar
+rancher-charts-mirror-to-rancher-org.sh    # Script to mirror Linux images
+rancher-charts-windows-save-images.ps1     # PowerShell save script
+rancher-charts-windows-load-images.ps1     # PowerShell load script
+rancher-charts-windows-mirror-to-rancher-org.ps1  # PowerShell mirror script
+rancher-charts-image-origins.txt       # Mapping of images to source charts
+```
+
+**File Format Examples**:
+
+`rancher-charts-images.txt`:
+```
+rancher/fleet:v0.10.2
+rancher/fleet-agent:v0.10.2
+rancher/gitjob:v0.9.8
+rancher/shell:v0.2.2
+...
+```
+
+`rancher-charts-images-sources.txt`:
+```
+rancher/fleet:v0.10.2 fleet:103.0.2+up0.10.2
+rancher/fleet-agent:v0.10.2 fleet:103.0.2+up0.10.2
+rancher/gitjob:v0.9.8 fleet:103.0.2+up0.10.2
+rancher/shell:v0.2.2 rancher-webhook:103.0.5+up0.5.2
+...
+```
+
+### Generator Package Structure
+
+**Package**: `internal/imagelist/`
+
+```go
+// imagelist/scanner.go
+package imagelist
+
+import (
+    "archive/tar"
+    "compress/gzip"
+    "gopkg.in/yaml.v3"
+)
+
+type ChartScanner struct {
+    ChartsPath string  // Path to extracted chart catalog
+}
+
+// ScanCharts scans all charts in a catalog and returns image references
+func (s *ChartScanner) ScanCharts() ([]ImageReference, error) {
+    // 1. Load index.yaml
+    // 2. For each chart version in index:
+    //    a. Extract chart.tgz
+    //    b. Parse values.yaml
+    //    c. Extract image references using known patterns
+    // 3. Return deduplicated list
+}
+
+type ImageReference struct {
+    Image       string   // Full image reference (e.g., rancher/fleet:v0.10.2)
+    Sources     []string // Chart sources (e.g., ["fleet:103.0.2+up0.10.2"])
+    OS          string   // "linux" or "windows"
+}
+
+// Common image reference patterns in Helm values.yaml:
+// - image: "repo/name:tag"
+// - repository: "repo/name", tag: "tag"
+// - global.cattle.systemDefaultRegistry + image
+// - rke2/k3s image lists (special handling)
+```
+
+**Key Scanning Logic** (ported from rancher/rancher):
+
+1. **Pattern matching**: Scan values.yaml for common image fields
+   ```yaml
+   # Pattern 1: Direct image reference
+   image: rancher/fleet:v0.10.2
+   
+   # Pattern 2: Split repository/tag
+   image:
+     repository: rancher/fleet
+     tag: v0.10.2
+   
+   # Pattern 3: With registry override
+   global:
+     cattle:
+       systemDefaultRegistry: myregistry.com
+   image: rancher/fleet:v0.10.2  # Becomes: myregistry.com/rancher/fleet:v0.10.2
+   ```
+
+2. **OS detection**: Check chart annotations or values for Windows-specific charts
+
+3. **Deduplication**: Merge images from all charts, tracking sources
+
+### Integration with Build Workflow
+
+Image lists are generated **after** the chart image is built and published.
+
+**Updated Makefile**:
+
+```makefile
+export-images: ## Generate image lists from built chart image
+	@if [ -z "$(CHART_MAJOR)" ] || [ -z "$(VERSION)" ]; then \
+		echo "Error: CHART_MAJOR and VERSION required"; \
+		exit 1; \
+	fi
+	@echo "Generating image lists for $(CHART_MAJOR) $(VERSION)..."
+	@# Pull the published image
+	docker pull $(IMAGE_REPO):$(VERSION)
+	@# Extract chart catalogs
+	CONTAINER_ID=$$(docker create $(IMAGE_REPO):$(VERSION)); \
+	rm -rf /tmp/rancher-assets-charts-$(VERSION); \
+	mkdir -p /tmp/rancher-assets-charts-$(VERSION); \
+	docker cp $$CONTAINER_ID:/var/lib/rancher-data/local-catalogs/v2 /tmp/rancher-assets-charts-$(VERSION)/; \
+	docker rm $$CONTAINER_ID
+	@# Run image list generator
+	go run main.go export-images \
+		--charts-path /tmp/rancher-assets-charts-$(VERSION)/v2 \
+		--version $(VERSION) \
+		--output-dir dist/$(VERSION)
+	@echo "Image lists generated in dist/$(VERSION)/"
+```
+
+**Updated Release Workflow** (`.github/workflows/release.yml`):
+
+Add job after `build-charts-image`:
+
+```yaml
+  export-image-lists:
+    needs: [extract-metadata, build-charts-image]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      
+      - name: Generate image lists
+        run: |
+          make export-images \
+            CHART_MAJOR=${{ needs.extract-metadata.outputs.major }} \
+            VERSION=${{ needs.extract-metadata.outputs.version }}
+      
+      - name: Upload image lists as release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/${{ needs.extract-metadata.outputs.version }}/rancher-charts-*.txt
+            dist/${{ needs.extract-metadata.outputs.version }}/rancher-charts-*.sh
+            dist/${{ needs.extract-metadata.outputs.version }}/rancher-charts-*.ps1
+```
+
+### Usage by Rancher
+
+Rancher's air-gapped documentation will reference these published assets:
+
+```bash
+# Download image lists for Rancher 2.15 (charts v1.0.0)
+wget https://github.com/rancher/rancher-assets/releases/download/v1.0.0/rancher-charts-images.txt
+
+# Save images to tar
+wget https://github.com/rancher/rancher-assets/releases/download/v1.0.0/rancher-charts-save-images.sh
+chmod +x rancher-charts-save-images.sh
+./rancher-charts-save-images.sh --image-list rancher-charts-images.txt
+
+# Load images in air-gapped environment
+wget https://github.com/rancher/rancher-assets/releases/download/v1.0.0/rancher-charts-load-images.sh
+chmod +x rancher-charts-load-images.sh
+./rancher-charts-load-images.sh --image-list rancher-charts-images.txt
+```
+
+### Migration from rancher/rancher
+
+**What to port**:
+- Core chart scanning logic (`charts.go:FetchImages`)
+- Image pattern extraction (`pickImagesFromValuesMap`)
+- Script generation templates (`utilities.go` script templates)
+
+**What to simplify/remove**:
+- KDM data loading (not needed - charts are self-contained)
+- External image handling (k3s/rke2 upgrade images - Rancher's responsibility)
+- Rancher version constraint filtering (all charts in image are relevant)
+- Settings/buildconfig dependencies (hardcoded values if needed)
+- System images (shell, audit-log, etc. - Rancher's responsibility)
+
+**Implementation approach**:
+1. Copy `pkg/image/charts.go` as starting point → `internal/imagelist/scanner.go`
+2. Remove Rancher version constraint checking
+3. Remove dependencies on `settings`, `buildconfig`, `apisv3`
+4. Copy script templates from `utilities.go` → `internal/imagelist/scripts.go`
+5. Simplify to focus on: scan → extract → output files
 
 ---
 
@@ -1152,6 +1382,8 @@ rancher-assets tag v1.0.0
    - `.github/workflows/release-charts-image.yml` → reference
    - `.github/workflows/charts-update-pr.yml` → reference
    - Chart branch configs from `build.yaml` → `config.yaml`
+   - `pkg/image/charts.go` → `internal/imagelist/scanner.go` (simplified)
+   - `pkg/image/utilities/utilities.go` → `internal/imagelist/scripts.go` (script templates only)
 
 ### Phase 2: Build Generator
 
@@ -1159,8 +1391,14 @@ rancher-assets tag v1.0.0
    - Parse `config.yaml`
    - Generate Dockerfiles per chart major
    - Update `lock.yaml`
-2. **Create Makefile**
-3. **Test locally**: `make generate && make build CHART_MAJOR=v1 VERSION=v1.0.0-rc.1`
+2. **Create image list scanner**:
+   - Port chart scanning logic from rancher/rancher
+   - Simplify: remove Rancher version constraints, KDM, external images
+   - Add `export-images` subcommand to generator CLI
+3. **Create Makefile**
+4. **Test locally**: 
+   - `make generate && make build CHART_MAJOR=v1 VERSION=v1.0.0-rc.1`
+   - `make export-images CHART_MAJOR=v1 VERSION=v1.0.0-rc.1`
 
 ### Phase 3: Setup CI
 
@@ -1247,13 +1485,15 @@ This design provides:
 ✅ **Smart build detection**: Tag format determines prod vs dev  
 ✅ **Automatic integration**: Auto-PR to rancher/rancher  
 ✅ **Head build support**: Upstream changes trigger rebuilds  
+✅ **Air-gap support**: Image lists and mirror scripts generated automatically  
 ✅ **Auditability**: Lock file tracks what's bundled  
 ✅ **Local development**: `make generate` works anywhere  
 
 **Next Steps**:
 1. Create rancher-assets repository
-2. Implement Go generator (main.go + internal/)
-3. Add initial config.yaml (v1 for Rancher 2.15)
-4. Test with RC tags
-5. Configure upstream webhooks
-6. Production release v1.0.0
+2. Implement Go generator (main.go + internal/generator)
+3. Port and simplify image list scanner (internal/imagelist)
+4. Add initial config.yaml (v1 for Rancher 2.15)
+5. Test with RC tags (both image build and image list generation)
+6. Configure upstream webhooks
+7. Production release v1.0.0 with image lists as GitHub release assets

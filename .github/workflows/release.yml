@@ -124,8 +124,60 @@ jobs:
           TARGET_PLATFORMS: linux/amd64,linux/arm64
           IMAGE_REPO: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}
 
-  create-rancher-pr:
+  export-image-lists:
     needs: [parse-tag, build-and-push]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image lists
+        run: |
+          make export-images \
+            CHART_MAJOR=${{ needs.parse-tag.outputs.major }} \
+            VERSION=${{ needs.parse-tag.outputs.version }} \
+            IMAGE_REPO=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}
+
+      - name: Upload image lists as release assets
+        run: |
+          VERSION="${{ needs.parse-tag.outputs.version }}"
+          gh release upload "$VERSION" dist/$VERSION/* --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-release:
+    needs: [parse-tag, build-and-push, export-image-lists]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish release (undraft)
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.parse-tag.outputs.release_id }},
+              draft: false
+            });
+            console.log('Release ${{ needs.parse-tag.outputs.version }} published successfully!');
+
+  create-rancher-pr:
+    needs: [parse-tag, publish-release]
     if: success() && needs.parse-tag.outputs.build_type == 'prod'
     runs-on: ubuntu-latest
     steps:
@@ -155,21 +207,3 @@ jobs:
             --body "$PR_BODY"
         env:
           GH_TOKEN: ${{ secrets.RANCHER_REPO_TOKEN }}
-
-  publish-release:
-    needs: [parse-tag, build-and-push]
-    if: success()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Publish release (undraft)
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            await github.rest.repos.updateRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: ${{ needs.parse-tag.outputs.release_id }},
-              draft: false
-            });
-            console.log('Release ${{ needs.parse-tag.outputs.version }} published successfully!');

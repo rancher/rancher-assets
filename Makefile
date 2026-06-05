@@ -14,7 +14,7 @@ SOURCE_REPO ?= rancher/rancher-assets
 IMAGE_REPO ?= $(REGISTRY)/$(ORG)/$(REPO)
 TARGET_PLATFORMS ?= linux/amd64,linux/arm64
 
-.PHONY: help generate verify build build-all build-release push-image push-all vendor-update release-auto release-manual
+.PHONY: help generate verify export-images build build-all build-release push-image push-all vendor-update release-auto release-manual
 
 help: ## Show this help message
 	@echo "Rancher Assets Build System"
@@ -51,6 +51,32 @@ verify: ## Verify no uncommitted changes in generated files
 		exit 1; \
 	fi
 	@echo "✅ Verified: all generated files are committed"
+
+export-images: ## Generate image lists from chart catalogs (requires CHART_MAJOR and VERSION)
+	@if [ -z "$(CHART_MAJOR)" ] || [ -z "$(VERSION)" ]; then \
+		echo "❌ Error: CHART_MAJOR and VERSION required"; \
+		echo "Usage: make export-images CHART_MAJOR=v1 VERSION=v1.0.0"; \
+		exit 1; \
+	fi
+	@echo "Generating image lists for $(CHART_MAJOR) $(VERSION)..."
+	@# Pull the published image
+	docker pull $(IMAGE_REPO):$(VERSION)
+	@# Extract chart catalogs
+	@CONTAINER_ID=$$(docker create $(IMAGE_REPO):$(VERSION)); \
+	rm -rf /tmp/rancher-assets-charts-$(VERSION); \
+	mkdir -p /tmp/rancher-assets-charts-$(VERSION); \
+	docker cp $$CONTAINER_ID:/var/lib/rancher-data/local-catalogs/v2 /tmp/rancher-assets-charts-$(VERSION)/; \
+	docker rm $$CONTAINER_ID
+	@# Run image list generator
+	@mkdir -p dist/$(VERSION)
+	@go run main.go export-images \
+		--charts-path /tmp/rancher-assets-charts-$(VERSION)/v2 \
+		--version $(VERSION) \
+		--output-dir dist/$(VERSION)
+	@echo ""
+	@echo "✅ Image lists generated in dist/$(VERSION)/"
+	@echo ""
+	@ls -lh dist/$(VERSION)/
 
 vendor-update: ## Update Go dependencies and vendor them
 	@echo "Updating Go dependencies..."
