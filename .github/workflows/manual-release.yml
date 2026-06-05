@@ -138,6 +138,14 @@ jobs:
 
           echo "Creating tag $VERSION at ${{ needs.validate-and-plan.outputs.commit_sha }}"
 
+          # Debug: Check which token is being used
+          if [ -n "${{ secrets.WORKFLOW_PAT }}" ]; then
+            echo "Using WORKFLOW_PAT (will trigger workflows)"
+          else
+            echo "WARNING: Using GITHUB_TOKEN fallback (will NOT trigger workflows)"
+            echo "Configure WORKFLOW_PAT secret to enable automated builds"
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
