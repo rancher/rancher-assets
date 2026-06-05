@@ -13,7 +13,7 @@ SOURCE_REPO ?= rancher/rancher-assets
 IMAGE_REPO ?= $(REGISTRY)/$(ORG)/$(REPO)
 TARGET_PLATFORMS ?= linux/amd64,linux/arm64
 
-.PHONY: help generate verify build build-all build-release push-all
+.PHONY: help generate verify build build-all build-release push-all vendor-update
 
 help: ## Show this help message
 	@echo "Rancher Assets Build System"
@@ -48,6 +48,18 @@ verify: ## Verify no uncommitted changes in generated files
 		exit 1; \
 	fi
 	@echo "✅ Verified: all generated files are committed"
+
+vendor-update: ## Update Go dependencies and vendor them
+	@echo "Updating Go dependencies..."
+	go get -u ./...
+	@echo "Tidying go.mod..."
+	go mod tidy
+	@echo "Vendoring dependencies..."
+	go mod vendor
+	@echo "✅ Dependencies updated and vendored"
+	@echo ""
+	@echo "Review changes with: git diff go.mod go.sum vendor/"
+	@echo "Commit with: git add go.mod go.sum vendor/ && git commit -m 'Update Go dependencies'"
 
 build: ## Build chart image (requires CHART_MAJOR and VERSION)
 	@if [ -z "$(CHART_MAJOR)" ] || [ -z "$(VERSION)" ]; then \
