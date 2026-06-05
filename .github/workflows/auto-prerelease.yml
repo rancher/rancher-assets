@@ -113,31 +113,43 @@ jobs:
           ref: ${{ needs.detect-changes.outputs.commit_sha }}
           fetch-depth: 0
 
-      - name: Create and push tag
+      - name: Create prerelease
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT || secrets.GITHUB_TOKEN }}
         run: |
-          echo "Creating auto prerelease tag ${{ matrix.release.new_version }} at ${{ needs.detect-changes.outputs.commit_sha }}"
+          VERSION="${{ matrix.release.new_version }}"
+
+          echo "Creating auto prerelease $VERSION at ${{ needs.detect-changes.outputs.commit_sha }}"
 
           # Debug: Check which token is being used
           if [ -n "${{ secrets.WORKFLOW_PAT }}" ]; then
             echo "Using WORKFLOW_PAT (will trigger workflows)"
-            TOKEN="${{ secrets.WORKFLOW_PAT }}"
           else
             echo "WARNING: Using GITHUB_TOKEN fallback (will NOT trigger workflows)"
             echo "Configure WORKFLOW_PAT secret to enable automated builds"
-            TOKEN="${{ secrets.GITHUB_TOKEN }}"
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Generate release notes
+          cat > /tmp/release-notes.md <<EOF
+          Auto pre-release $VERSION
 
-          .github/scripts/create-prerelease-tag.sh \
-            "${{ matrix.release.new_version }}" \
-            "${{ matrix.release.major }}" \
-            "${{ matrix.release.current_stable }}" \
-            "${{ matrix.release.current_prerelease }}"
+          **Chart Major**: ${{ matrix.release.major }}
+          **Triggered by**: push to main
 
-          # Push tag with explicit token authentication
-          git push "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" "${{ matrix.release.new_version }}"
+          **Current Stable**: ${{ matrix.release.current_stable }}
+          **Current Prerelease**: ${{ matrix.release.current_prerelease }}
+
+          ---
+
+          This is an automated pre-release. Check the [Actions](../../actions/workflows/build-release.yml) tab for build status.
+          EOF
+
+          # Create prerelease (creates tag automatically and triggers workflow)
+          gh release create "$VERSION" \
+            --target "${{ needs.detect-changes.outputs.commit_sha }}" \
+            --title "Rancher Assets $VERSION (Pre-release)" \
+            --notes-file /tmp/release-notes.md \
+            --prerelease
 
   update-versions-branch:
     needs: [detect-changes, plan-prereleases, create-tags]

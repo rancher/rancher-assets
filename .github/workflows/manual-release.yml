@@ -129,36 +129,44 @@ jobs:
           ref: ${{ needs.validate-and-plan.outputs.commit_sha }}
           fetch-depth: 0
 
-      - name: Create and push tag
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT || secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ matrix.release.new_version }}"
           MAJOR="${{ matrix.release.major }}"
 
-          echo "Creating tag $VERSION at ${{ needs.validate-and-plan.outputs.commit_sha }}"
+          echo "Creating release $VERSION at ${{ needs.validate-and-plan.outputs.commit_sha }}"
 
           # Debug: Check which token is being used
           if [ -n "${{ secrets.WORKFLOW_PAT }}" ]; then
             echo "Using WORKFLOW_PAT (will trigger workflows)"
-            TOKEN="${{ secrets.WORKFLOW_PAT }}"
           else
             echo "WARNING: Using GITHUB_TOKEN fallback (will NOT trigger workflows)"
             echo "Configure WORKFLOW_PAT secret to enable automated builds"
-            TOKEN="${{ secrets.GITHUB_TOKEN }}"
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          .github/scripts/create-release-tag.sh \
+          # Generate release notes
+          RELEASE_NOTES=$(.github/scripts/generate-manual-release-notes.sh \
             "$VERSION" \
             "$MAJOR" \
             "${{ github.event.inputs.release_type }}" \
             "${{ github.event.inputs.bump_type }}" \
             "${{ matrix.release.current_stable }}" \
-            "${{ matrix.release.current_prerelease }}"
+            "${{ matrix.release.current_prerelease }}")
 
-          # Push tag with explicit token authentication
-          git push "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" "$VERSION"
+          # Create release (creates tag automatically and triggers workflow)
+          if [ "${{ github.event.inputs.release_type }}" = "stable" ]; then
+            PRERELEASE_FLAG=""
+          else
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          gh release create "$VERSION" \
+            --target "${{ needs.validate-and-plan.outputs.commit_sha }}" \
+            --title "Rancher Assets $VERSION" \
+            --notes "$RELEASE_NOTES" \
+            $PRERELEASE_FLAG
 
   update-versions-branch:
     needs: [validate-and-plan, create-tags]
