@@ -178,31 +178,23 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Generate final release body
-        id: final_body
         run: |
-          BODY=$(.github/scripts/generate-release-notes.sh \
+          .github/scripts/generate-release-notes.sh \
             "${{ needs.parse-tag.outputs.version }}" \
             "${{ needs.parse-tag.outputs.major }}" \
             "${{ needs.parse-tag.outputs.build_type }}" \
-            --tag-message "${{ steps.tag_message.outputs.message }}")
-
-          echo "body<<EOF" >> $GITHUB_OUTPUT
-          echo "$BODY" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+            --tag-message "${{ steps.tag_message.outputs.message }}" \
+            > /tmp/release-notes.md
 
       - name: Publish release (undraft)
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            await github.rest.repos.updateRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: ${{ needs.parse-tag.outputs.release_id }},
-              draft: false,
-              body: `${{ steps.final_body.outputs.body }}`
-            });
-            console.log('Release ${{ needs.parse-tag.outputs.version }} published successfully!');
+        run: |
+          VERSION="${{ needs.parse-tag.outputs.version }}"
+          gh release edit "$VERSION" \
+            --draft=false \
+            --notes-file /tmp/release-notes.md
+          echo "Release $VERSION published successfully!"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   create-rancher-pr:
     needs: [parse-tag, publish-release]
