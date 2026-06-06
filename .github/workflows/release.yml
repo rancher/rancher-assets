@@ -57,6 +57,20 @@ jobs:
           echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Generate draft release body
+        id: draft_body
+        run: |
+          BODY=$(.github/scripts/generate-release-notes.sh \
+            "${{ steps.parse.outputs.version }}" \
+            "${{ steps.parse.outputs.major }}" \
+            "${{ steps.parse.outputs.build_type }}" \
+            --draft \
+            --tag-message "${{ steps.tag_message.outputs.message }}")
+
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create draft release
         id: create_release
         uses: actions/create-release@v1
@@ -67,19 +81,7 @@ jobs:
           release_name: Rancher Assets ${{ steps.parse.outputs.version }}
           draft: true
           prerelease: ${{ steps.parse.outputs.prerelease }}
-          body: |
-            ## Rancher Assets ${{ steps.parse.outputs.version }}
-
-            **Chart Major**: ${{ steps.parse.outputs.major }}
-            **Build Type**: ${{ steps.parse.outputs.build_type }}
-
-            ---
-
-            ${{ steps.tag_message.outputs.message }}
-
-            ---
-
-            *This release is being built. It will be published automatically when all jobs complete successfully.*
+          body: ${{ steps.draft_body.outputs.body }}
 
   build-and-push:
     needs: parse-tag
@@ -163,6 +165,31 @@ jobs:
     if: success()
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get tag message
+        id: tag_message
+        run: |
+          VERSION=${{ needs.parse-tag.outputs.version }}
+          TAG_MESSAGE=$(git tag -l --format='%(contents)' "$VERSION")
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Generate final release body
+        id: final_body
+        run: |
+          BODY=$(.github/scripts/generate-release-notes.sh \
+            "${{ needs.parse-tag.outputs.version }}" \
+            "${{ needs.parse-tag.outputs.major }}" \
+            "${{ needs.parse-tag.outputs.build_type }}" \
+            --tag-message "${{ steps.tag_message.outputs.message }}")
+
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Publish release (undraft)
         uses: actions/github-script@v7
         with:
@@ -172,7 +199,8 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               release_id: ${{ needs.parse-tag.outputs.release_id }},
-              draft: false
+              draft: false,
+              body: `${{ steps.final_body.outputs.body }}`
             });
             console.log('Release ${{ needs.parse-tag.outputs.version }} published successfully!');
 
