@@ -36,4 +36,7 @@ cp -r "${SOURCE_DIR}"/* "${DEST_DIR}"/
 echo "✓ Charts copied successfully"
 echo ""
 echo "Available catalogs:"
-ls -1 "${DEST_DIR}" | sed 's/^/  - /'
+for catalog in "${DEST_DIR}"/*; do
+    [ -e "$catalog" ] || continue
+    echo "  - $(basename "$catalog")"
+done
