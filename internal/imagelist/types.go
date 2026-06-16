@@ -7,8 +7,19 @@ type ImageReference struct {
 	OS      string   // "linux" or "windows"
 }
 
+// InvalidImageEntry represents an invalid image reference with full context
+type InvalidImageEntry struct {
+	Image      string   // The invalid image reference
+	Reason     string   // Why it's invalid
+	Sources    []string // Chart sources where this was found (chart:version)
+	CatalogRef string   // Cluster repo catalog reference
+}
+
 // ImageSet is a map of image -> set of sources
 type ImageSet map[string]map[string]struct{}
+
+// InvalidImageSet tracks invalid images with their context
+type InvalidImageSet map[string]*InvalidImageEntry
 
 // ExportConfig contains paths and settings for image list export
 type ExportConfig struct {

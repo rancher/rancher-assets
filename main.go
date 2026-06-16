@@ -367,19 +367,27 @@ func exportImagesCommand() error {
 	fmt.Printf("  Output dir: %s\n\n", config.OutputDir)
 
 	// Scan charts for image references
-	refs, err := imagelist.ScanCharts(config)
+	result, err := imagelist.ScanCharts(config)
 	if err != nil {
 		return fmt.Errorf("failed to scan charts: %w", err)
 	}
 
-	fmt.Printf("\nFound %d unique images\n", len(refs))
+	fmt.Printf("\nScan complete:\n")
+	fmt.Printf("  Valid images: %d\n", len(result.ValidImages))
+	if len(result.InvalidImages) > 0 {
+		fmt.Printf("  Invalid images: %d ⚠️\n", len(result.InvalidImages))
+	}
 
 	// Write image lists and scripts
-	if err := imagelist.WriteImageLists(refs, config); err != nil {
+	if err := imagelist.WriteImageLists(result, config); err != nil {
 		return fmt.Errorf("failed to write image lists: %w", err)
 	}
 
 	fmt.Println("\n✅ Image list export complete!")
+	if len(result.InvalidImages) > 0 {
+		fmt.Printf("\n⚠️  Warning: %d invalid image references were found and excluded.\n", len(result.InvalidImages))
+		fmt.Printf("   See rancher-charts-invalid-images.txt for details.\n")
+	}
 
 	return nil
 }

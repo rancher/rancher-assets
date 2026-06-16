@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rancher/ob-charts-tool/helmtools/chart"
+	"github.com/rancher/ob-charts-tool/helmtools/image"
 	"gopkg.in/yaml.v3"
 )
 
@@ -19,21 +21,16 @@ const (
 	Windows = "windows"
 )
 
-// ChartIndex represents the structure of a Helm chart repository index.yaml
-type ChartIndex struct {
-	Entries map[string][]ChartVersion `yaml:"entries"`
-}
-
-// ChartVersion represents a single chart version in the index
-type ChartVersion struct {
-	Name    string   `yaml:"name"`
-	Version string   `yaml:"version"`
-	URLs    []string `yaml:"urls"`
+// ScanResult contains both valid and invalid image references
+type ScanResult struct {
+	ValidImages   []ImageReference
+	InvalidImages []InvalidImageEntry
 }
 
 // ScanCharts scans all chart catalogs and extracts image references
-func ScanCharts(config ExportConfig) ([]ImageReference, error) {
+func ScanCharts(config ExportConfig) (*ScanResult, error) {
 	imagesSet := make(ImageSet)
+	invalidSet := make(InvalidImageSet)
 
 	// Scan the three chart catalogs
 	catalogs := []struct {
@@ -54,13 +51,18 @@ func ScanCharts(config ExportConfig) ([]ImageReference, error) {
 		}
 
 		fmt.Printf("  Scanning %s...\n", catalog.name)
-		if err := scanCatalog(catalogPath, catalog.name, imagesSet); err != nil {
+		if err := scanCatalog(catalogPath, catalog.name, imagesSet, invalidSet); err != nil {
 			return nil, fmt.Errorf("failed to scan %s: %w", catalog.name, err)
 		}
 	}
 
-	// Convert ImageSet to sorted list
-	return imagesToList(imagesSet), nil
+	// Convert sets to sorted lists
+	result := &ScanResult{
+		ValidImages:   imagesToList(imagesSet),
+		InvalidImages: invalidImagesToList(invalidSet),
+	}
+
+	return result, nil
 }
 
 // findCatalogDir finds the catalog directory which might have a hash suffix
@@ -93,7 +95,7 @@ func findCatalogDir(basePath string) (string, error) {
 }
 
 // scanCatalog scans a single chart catalog
-func scanCatalog(catalogPath string, catalogName string, imagesSet ImageSet) error {
+func scanCatalog(catalogPath string, catalogName string, imagesSet ImageSet, invalidSet InvalidImageSet) error {
 	indexPath := filepath.Join(catalogPath, "index.yaml")
 
 	// Load index.yaml
@@ -102,8 +104,9 @@ func scanCatalog(catalogPath string, catalogName string, imagesSet ImageSet) err
 		return fmt.Errorf("failed to read index.yaml: %w", err)
 	}
 
-	var index ChartIndex
-	if err := yaml.Unmarshal(indexData, &index); err != nil {
+	// Parse index using helmtools
+	index, err := chart.ParseIndex(indexData)
+	if err != nil {
 		return fmt.Errorf("failed to parse index.yaml: %w", err)
 	}
 
@@ -124,7 +127,7 @@ func scanCatalog(catalogPath string, catalogName string, imagesSet ImageSet) err
 		}
 
 		chartPath := filepath.Join(catalogPath, version.URLs[0])
-		if err := extractImagesFromChart(chartPath, chartSource, imagesSet); err != nil {
+		if err := extractImagesFromChart(chartPath, chartSource, catalogName, imagesSet, invalidSet); err != nil {
 			fmt.Printf("    Warning: failed to scan %s: %v\n", chartSource, err)
 			continue
 		}
@@ -134,7 +137,7 @@ func scanCatalog(catalogPath string, catalogName string, imagesSet ImageSet) err
 }
 
 // extractImagesFromChart extracts image references from a chart .tgz file
-func extractImagesFromChart(chartPath string, source string, imagesSet ImageSet) error {
+func extractImagesFromChart(chartPath string, source string, catalogRef string, imagesSet ImageSet, invalidSet InvalidImageSet) error {
 	file, err := os.Open(chartPath)
 	if err != nil {
 		return err
@@ -165,82 +168,79 @@ func extractImagesFromChart(chartPath string, source string, imagesSet ImageSet)
 				return err
 			}
 
-			// Parse values.yaml
-			var values map[string]interface{}
-			if err := yaml.Unmarshal(data, &values); err != nil {
+			// Use helmtools to extract images
+			images, err := image.ExtractImages(data, "")
+			if err != nil {
 				// Skip invalid YAML
 				continue
 			}
 
-			// Extract images from values
-			extractImages(values, source, imagesSet)
+			// Process extracted images and add to our tracking sets
+			for _, img := range images.Values() {
+				imageRef := formatImageReference(img)
+				addImage(imagesSet, invalidSet, imageRef, source, catalogRef)
+			}
+
+			// Also scan for legacy patterns not covered by helmtools
+			var values map[string]interface{}
+			if err := yaml.Unmarshal(data, &values); err == nil {
+				extractLegacyImages(values, source, catalogRef, imagesSet, invalidSet)
+			}
 		}
 	}
 
 	return nil
 }
 
-// extractImages recursively extracts image references from values map
-func extractImages(values interface{}, source string, imagesSet ImageSet) {
+// formatImageReference converts a helmtools Image to a full image reference string
+func formatImageReference(img image.Image) string {
+	var parts []string
+
+	if img.Registry != "" {
+		parts = append(parts, img.Registry)
+	}
+
+	if img.Repository != "" {
+		parts = append(parts, img.Repository)
+	}
+
+	imageRef := strings.Join(parts, "/")
+
+	if img.Tag != "" {
+		imageRef = fmt.Sprintf("%s:%s", imageRef, img.Tag)
+	}
+
+	return imageRef
+}
+
+// extractLegacyImages handles image patterns not covered by helmtools
+// This includes direct image strings and systemDefaultRegistry overrides
+func extractLegacyImages(values interface{}, source string, catalogRef string, imagesSet ImageSet, invalidSet InvalidImageSet) {
 	switch v := values.(type) {
 	case map[string]interface{}:
-		// Check for direct image reference patterns
-		if img := getImageFromMap(v); img != "" {
-			addImage(imagesSet, img, source)
+		// Check for direct "image" string field (not structured as registry/repo/tag)
+		if img, ok := v["image"].(string); ok && img != "" {
+			// Only add if it's a complete image reference (contains : or @)
+			if strings.Contains(img, ":") || strings.Contains(img, "@") {
+				addImage(imagesSet, invalidSet, img, source, catalogRef)
+			}
 		}
 
 		// Recurse into nested maps
 		for _, val := range v {
-			extractImages(val, source, imagesSet)
+			extractLegacyImages(val, source, catalogRef, imagesSet, invalidSet)
 		}
 
 	case []interface{}:
 		// Recurse into arrays
 		for _, val := range v {
-			extractImages(val, source, imagesSet)
+			extractLegacyImages(val, source, catalogRef, imagesSet, invalidSet)
 		}
 	}
 }
 
-// getImageFromMap tries to extract an image reference from a map
-func getImageFromMap(m map[string]interface{}) string {
-	// Pattern 1: Direct "image" field
-	if img, ok := m["image"].(string); ok && img != "" {
-		return img
-	}
-
-	// Pattern 2: repository + tag
-	repo, hasRepo := m["repository"].(string)
-	tag, hasTag := m["tag"].(string)
-	if hasRepo && hasTag && repo != "" && tag != "" {
-		return fmt.Sprintf("%s:%s", repo, tag)
-	}
-
-	// Pattern 3: registry + repository + tag (handle systemDefaultRegistry override)
-	if hasRepo && hasTag {
-		// Check for global.cattle.systemDefaultRegistry
-		if registry := getSystemDefaultRegistry(m); registry != "" {
-			return fmt.Sprintf("%s/%s:%s", registry, repo, tag)
-		}
-	}
-
-	return ""
-}
-
-// getSystemDefaultRegistry tries to find systemDefaultRegistry in values
-func getSystemDefaultRegistry(values map[string]interface{}) string {
-	if global, ok := values["global"].(map[string]interface{}); ok {
-		if cattle, ok := global["cattle"].(map[string]interface{}); ok {
-			if reg, ok := cattle["systemDefaultRegistry"].(string); ok {
-				return reg
-			}
-		}
-	}
-	return ""
-}
-
-// addImage adds an image to the set with its source
-func addImage(imagesSet ImageSet, image string, source string) {
+// addImage adds an image to the set with its source, or tracks it as invalid
+func addImage(imagesSet ImageSet, invalidSet InvalidImageSet, image string, source string, catalogRef string) {
 	if image == "" {
 		return
 	}
@@ -253,6 +253,16 @@ func addImage(imagesSet ImageSet, image string, source string) {
 	// Normalize image reference
 	image = strings.TrimSpace(image)
 
+	// Validate the image reference
+	if err := validateImage(image); err != nil {
+		// Track as invalid and emit warning
+		reason := err.Error()
+		addInvalidImage(invalidSet, image, reason, source, catalogRef)
+		fmt.Printf("    ⚠️  Invalid image in %s/%s: %s - %s\n", catalogRef, source, image, reason)
+		return
+	}
+
+	// Add to valid images set
 	if imagesSet[image] == nil {
 		imagesSet[image] = make(map[string]struct{})
 	}
@@ -290,4 +300,26 @@ func imagesToList(imagesSet ImageSet) []ImageReference {
 	})
 
 	return refs
+}
+
+// invalidImagesToList converts InvalidImageSet to sorted list of InvalidImageEntries
+func invalidImagesToList(invalidSet InvalidImageSet) []InvalidImageEntry {
+	var entries []InvalidImageEntry
+
+	// Convert to list
+	for _, entry := range invalidSet {
+		// Sort sources for deterministic output
+		sort.Strings(entry.Sources)
+		entries = append(entries, *entry)
+	}
+
+	// Sort by image name, then by reason
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Image != entries[j].Image {
+			return entries[i].Image < entries[j].Image
+		}
+		return entries[i].Reason < entries[j].Reason
+	})
+
+	return entries
 }
