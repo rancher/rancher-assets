@@ -36,7 +36,23 @@ func main() {
 			os.Exit(1)
 		}
 	case "changed-majors":
-		if err := changedMajorsCommand(); err != nil {
+		// Deprecated - use changed-minors
+		if err := changedMinorsCommand(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "changed-minors":
+		if err := changedMinorsCommand(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "list-minors":
+		if err := listMinorsCommand(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "calver-dev-version":
+		if err := calverDevVersionCommand(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -62,12 +78,15 @@ func printUsage() {
 	fmt.Println("")
 	fmt.Println("Commands:")
 	fmt.Println("  generate             Generate Dockerfiles and update lock.yaml")
-	fmt.Println("  changed-majors       Detect chart majors with upstream ref changes")
+	fmt.Println("  changed-minors       Detect Rancher minors with upstream ref changes")
 	fmt.Println("                       Flags: --from=<commit> --to=<commit>")
-	fmt.Println("  plan-release         Plan version bumps for releases")
-	fmt.Println("                       Flags: --versions-file=<path> --type=<auto|manual>")
-	fmt.Println("                              --changed-majors=<json> (for auto)")
-	fmt.Println("                              --majors=<json> --bump=<minor|patch> --release=<stable|prerelease> (for manual)")
+	fmt.Println("  list-minors          List all Rancher minors from config.yaml")
+	fmt.Println("  calver-dev-version   Generate CalVer dev version for a Rancher minor")
+	fmt.Println("                       Flags: --minor=<rancher-minor>")
+	fmt.Println("  plan-release         Plan CalVer versions for releases")
+	fmt.Println("                       Flags: --type=<auto|manual>")
+	fmt.Println("                              --changed-minors=<json> (for auto)")
+	fmt.Println("                              --minors=<json> --release=<stable|prerelease> (for manual)")
 	fmt.Println("  export-images        Generate image lists from chart catalogs")
 	fmt.Println("                       Flags: --charts-path=<path> --version=<version> --output-dir=<path>")
 }
@@ -87,11 +106,11 @@ func generateCommand() error {
 		return fmt.Errorf("failed to load lock file: %w", err)
 	}
 
-	// Get chart majors and sort for consistent output
+	// Get Rancher minors and sort for consistent output
 	majors := cfg.ListChartMajors()
 	sort.Strings(majors)
 
-	fmt.Printf("Found %d chart major versions: %v\n", len(majors), majors)
+	fmt.Printf("Found %d Rancher minor versions: %v\n", len(majors), majors)
 
 	// Compute copy script hash for reproducibility
 	fmt.Printf("\nComputing copy-charts.sh hash...\n")
@@ -102,9 +121,9 @@ func generateCommand() error {
 	fmt.Printf("  Script hash: %s\n", scriptHash[:16]+"...")
 	lock.CopyScriptHash = scriptHash
 
-	// Generate Dockerfiles and query upstream for each chart major
+	// Generate Dockerfiles and query upstream for each Rancher minor
 	for _, major := range majors {
-		fmt.Printf("\nProcessing chart major: %s\n", major)
+		fmt.Printf("\nProcessing Rancher minor: %s\n", major)
 
 		// Ensure lock entry exists
 		lock.EnsureChartVersion(major)
@@ -203,9 +222,9 @@ func generateCommand() error {
 	return nil
 }
 
-func changedMajorsCommand() error {
+func changedMinorsCommand() error {
 	// Parse flags
-	fs := flag.NewFlagSet("changed-majors", flag.ExitOnError)
+	fs := flag.NewFlagSet("changed-minors", flag.ExitOnError)
 	fromCommit := fs.String("from", "", "From commit (required)")
 	toCommit := fs.String("to", "", "To commit (required)")
 	verbose := fs.Bool("verbose", false, "Show detailed change information")
@@ -218,7 +237,7 @@ func changedMajorsCommand() error {
 		return fmt.Errorf("both --from and --to are required")
 	}
 
-	// Get changed majors
+	// Get changed Rancher minors
 	changed, err := lockfile.ChangedMajors(*fromCommit, *toCommit)
 	if err != nil {
 		return err
@@ -235,12 +254,12 @@ func changedMajorsCommand() error {
 	if *verbose {
 		// Verbose output - show what changed
 		if len(changed) == 0 {
-			fmt.Println("No chart majors with upstream ref changes detected")
+			fmt.Println("No Rancher minors with upstream ref changes detected")
 			fmt.Println("(Only timestamp changes in lock.yaml)")
 		} else {
-			fmt.Printf("Changed chart majors (%d):\n", len(changed))
-			for _, major := range changed {
-				fmt.Printf("  - %s\n", major)
+			fmt.Printf("Changed Rancher minors (%d):\n", len(changed))
+			for _, minor := range changed {
+				fmt.Printf("  - %s\n", minor)
 			}
 		}
 	}
@@ -255,14 +274,53 @@ func changedMajorsCommand() error {
 	return nil
 }
 
+func listMinorsCommand() error {
+	// Load config
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Get all Rancher minors
+	minors := cfg.ListRancherMinors()
+
+	// Sort for consistent output
+	sort.Strings(minors)
+
+	// Output each minor on its own line
+	for _, minor := range minors {
+		fmt.Println(minor)
+	}
+
+	return nil
+}
+
+func calverDevVersionCommand() error {
+	// Parse flags
+	fs := flag.NewFlagSet("calver-dev-version", flag.ExitOnError)
+	minor := fs.String("minor", "", "Rancher minor (e.g., 2.15)")
+
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		return err
+	}
+
+	if *minor == "" {
+		return fmt.Errorf("--minor is required")
+	}
+
+	// Generate CalVer dev version
+	version := versions.GenerateCalVerTimestamp(*minor, "prerelease")
+	fmt.Println(version)
+
+	return nil
+}
+
 func planReleaseCommand() error {
 	// Parse flags
 	fs := flag.NewFlagSet("plan-release", flag.ExitOnError)
-	versionsFile := fs.String("versions-file", "", "Path to versions.yaml (required)")
 	planType := fs.String("type", "", "Plan type: auto or manual (required)")
-	changedMajorsJSON := fs.String("changed-majors", "", "JSON array of changed majors (for auto)")
-	majorsJSON := fs.String("majors", "", "JSON array of majors to release (for manual)")
-	bumpType := fs.String("bump", "", "Bump type: minor or patch (for manual)")
+	changedMinorsJSON := fs.String("changed-minors", "", "JSON array of changed Rancher minors (for auto)")
+	minorsJSON := fs.String("minors", "", "JSON array of Rancher minors to release (for manual)")
 	releaseType := fs.String("release", "", "Release type: stable or prerelease (for manual)")
 	verbose := fs.Bool("verbose", false, "Show detailed output")
 
@@ -270,45 +328,40 @@ func planReleaseCommand() error {
 		return err
 	}
 
-	if *versionsFile == "" || *planType == "" {
-		return fmt.Errorf("--versions-file and --type are required")
-	}
-
-	// Load versions file
-	vf, err := versions.LoadVersionsFile(*versionsFile)
-	if err != nil {
-		return err
+	if *planType == "" {
+		return fmt.Errorf("--type is required")
 	}
 
 	var plans []versions.ReleasePlan
+	var err error
 
 	switch *planType {
 	case "auto":
-		if *changedMajorsJSON == "" {
-			return fmt.Errorf("--changed-majors is required for auto type")
+		if *changedMinorsJSON == "" {
+			return fmt.Errorf("--changed-minors is required for auto type")
 		}
 
-		var changedMajors []string
-		if err := json.Unmarshal([]byte(*changedMajorsJSON), &changedMajors); err != nil {
-			return fmt.Errorf("failed to parse changed-majors JSON: %w", err)
+		var changedMinors []string
+		if err := json.Unmarshal([]byte(*changedMinorsJSON), &changedMinors); err != nil {
+			return fmt.Errorf("failed to parse changed-minors JSON: %w", err)
 		}
 
-		plans, err = versions.PlanAutoPrerelease(vf, changedMajors)
+		plans, err = versions.PlanAutoPrerelease(changedMinors)
 		if err != nil {
 			return err
 		}
 
 	case "manual":
-		if *majorsJSON == "" || *bumpType == "" || *releaseType == "" {
-			return fmt.Errorf("--majors, --bump, and --release are required for manual type")
+		if *minorsJSON == "" || *releaseType == "" {
+			return fmt.Errorf("--minors and --release are required for manual type")
 		}
 
-		var majors []string
-		if err := json.Unmarshal([]byte(*majorsJSON), &majors); err != nil {
-			return fmt.Errorf("failed to parse majors JSON: %w", err)
+		var minors []string
+		if err := json.Unmarshal([]byte(*minorsJSON), &minors); err != nil {
+			return fmt.Errorf("failed to parse minors JSON: %w", err)
 		}
 
-		plans, err = versions.PlanManualRelease(vf, majors, *bumpType, *releaseType)
+		plans, err = versions.PlanManualRelease(minors, *releaseType)
 		if err != nil {
 			return err
 		}
@@ -324,8 +377,8 @@ func planReleaseCommand() error {
 		} else {
 			fmt.Printf("Planned releases (%d):\n", len(plans))
 			for _, plan := range plans {
-				fmt.Printf("  %s: %s (stable=%s, prerelease=%s)\n",
-					plan.Major, plan.NewVersion, plan.CurrentStable, plan.CurrentPrerelease)
+				fmt.Printf("  %s: %s (%s)\n",
+					plan.RancherMinor, plan.Version, plan.ReleaseType)
 			}
 		}
 	}
@@ -367,26 +420,35 @@ func exportImagesCommand() error {
 	fmt.Printf("  Output dir: %s\n\n", config.OutputDir)
 
 	// Scan charts for image references
-	result, err := imagelist.ScanCharts(config)
+	results, err := imagelist.ScanCharts(config)
 	if err != nil {
 		return fmt.Errorf("failed to scan charts: %w", err)
 	}
 
+	// Calculate totals across all catalogs
+	totalValid := 0
+	totalInvalid := 0
+	for _, result := range results {
+		totalValid += len(result.ValidImages)
+		totalInvalid += len(result.InvalidImages)
+	}
+
 	fmt.Printf("\nScan complete:\n")
-	fmt.Printf("  Valid images: %d\n", len(result.ValidImages))
-	if len(result.InvalidImages) > 0 {
-		fmt.Printf("  Invalid images: %d ⚠️\n", len(result.InvalidImages))
+	fmt.Printf("  Catalogs scanned: %d\n", len(results))
+	fmt.Printf("  Total valid images: %d\n", totalValid)
+	if totalInvalid > 0 {
+		fmt.Printf("  Total invalid images: %d ⚠️\n", totalInvalid)
 	}
 
 	// Write image lists and scripts
-	if err := imagelist.WriteImageLists(result, config); err != nil {
+	if err := imagelist.WriteImageLists(results, config); err != nil {
 		return fmt.Errorf("failed to write image lists: %w", err)
 	}
 
 	fmt.Println("\n✅ Image list export complete!")
-	if len(result.InvalidImages) > 0 {
-		fmt.Printf("\n⚠️  Warning: %d invalid image references were found and excluded.\n", len(result.InvalidImages))
-		fmt.Printf("   See rancher-charts-invalid-images.txt for details.\n")
+	if totalInvalid > 0 {
+		fmt.Printf("\n⚠️  Warning: %d invalid image references were found and excluded.\n", totalInvalid)
+		fmt.Printf("   See *-invalid-images.txt files in each catalog directory for details.\n")
 	}
 
 	return nil

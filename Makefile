@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 DOCKERFILES_DIR := dockerfiles
 VERSION ?=
-CHART_MAJOR ?=
+RANCHER_MINOR ?=
 PUSH ?= false
 
 # Fork-friendly configuration - override these for your fork
@@ -25,12 +25,12 @@ help: ## Show this help message
 	@echo ""
 	@echo "Examples:"
 	@echo "  make generate"
-	@echo "  make build CHART_MAJOR=v1 VERSION=v1.0.0-rc.1"
+	@echo "  make build RANCHER_MINOR=v1 VERSION=v1.0.0-rc.1"
 	@echo "  make build-all                    # Dev builds with auto-generated versions"
 	@echo "  make push-all                     # Build and push all to registry"
 	@echo "  make build-release                # Local debug - builds latest-stable from lock.yaml"
 	@echo "  make build-release-with-lists     # Local debug - builds + generates image lists"
-	@echo "  make export-images CHART_MAJOR=v1 VERSION=v1.0.0  # Generate image lists"
+	@echo "  make export-images RANCHER_MINOR=v1 VERSION=v1.0.0  # Generate image lists"
 	@echo "  make release-auto                 # Create auto pre-release tags"
 	@echo "  make release-manual BUMP=minor RELEASE=prerelease"
 	@echo ""
@@ -54,10 +54,10 @@ verify: ## Verify no uncommitted changes in generated files
 	fi
 	@echo "✅ Verified: all generated files are committed"
 
-export-images: ## Generate image lists from chart catalogs (requires CHART_MAJOR and VERSION, optional: LOCAL=true for local builds)
-	@if [ -z "$(CHART_MAJOR)" ] || [ -z "$(VERSION)" ]; then \
-		echo "❌ Error: CHART_MAJOR and VERSION required"; \
-		echo "Usage: make export-images CHART_MAJOR=v1 VERSION=v1.0.0 [LOCAL=true]"; \
+export-images: ## Generate image lists from chart catalogs (requires RANCHER_MINOR and VERSION, optional: LOCAL=true for local builds)
+	@if [ -z "$(RANCHER_MINOR)" ] || [ -z "$(VERSION)" ]; then \
+		echo "❌ Error: RANCHER_MINOR and VERSION required"; \
+		echo "Usage: make export-images RANCHER_MINOR=v1 VERSION=v1.0.0 [LOCAL=true]"; \
 		exit 1; \
 	fi
 	@LOCAL_FLAG=""; \
@@ -73,60 +73,52 @@ export-images: ## Generate image lists from chart catalogs (requires CHART_MAJOR
 vendor-update: ## Update Go dependencies and vendor them
 	@./scripts/vendor-update.sh
 
-build: ## Build chart image (requires CHART_MAJOR and VERSION)
-	@if [ -z "$(CHART_MAJOR)" ] || [ -z "$(VERSION)" ]; then \
-		echo "❌ Error: CHART_MAJOR and VERSION required"; \
+build: ## Build chart image (requires RANCHER_MINOR and VERSION)
+	@if [ -z "$(RANCHER_MINOR)" ] || [ -z "$(VERSION)" ]; then \
+		echo "❌ Error: RANCHER_MINOR and VERSION required"; \
 		echo ""; \
 		echo "Examples:"; \
-		echo "  make build CHART_MAJOR=v1 VERSION=v1.0.0-rc.1  # Dev build"; \
-		echo "  make build CHART_MAJOR=v1 VERSION=v1.0.0       # Prod build"; \
+		echo "  make build RANCHER_MINOR=2.15 VERSION=v2.15-20260716T1430Z-dev  # Dev build"; \
+		echo "  make build RANCHER_MINOR=2.15 VERSION=v2.15-20260805T1600Z       # Prod build"; \
 		exit 1; \
 	fi
-	@if [ ! -f "$(DOCKERFILES_DIR)/Dockerfile.$(CHART_MAJOR)" ]; then \
-		echo "❌ Error: Dockerfile not found: $(DOCKERFILES_DIR)/Dockerfile.$(CHART_MAJOR)"; \
+	@# Select Dockerfile based on VERSION suffix (-dev or not)
+	@DOCKERFILE=$$(if echo "$(VERSION)" | grep -q -- "-dev$$"; then \
+		echo "$(DOCKERFILES_DIR)/Dockerfile.$(RANCHER_MINOR)-dev"; \
+	else \
+		echo "$(DOCKERFILES_DIR)/Dockerfile.$(RANCHER_MINOR)"; \
+	fi); \
+	if [ ! -f "$$DOCKERFILE" ]; then \
+		echo "❌ Error: Dockerfile not found: $$DOCKERFILE"; \
 		echo "Run 'make generate' first"; \
 		exit 1; \
-	fi
-	@eval $$(./scripts/get-build-vars.sh --major $(CHART_MAJOR) --version $(VERSION) --format shell); \
-	echo "Building $(CHART_MAJOR) version $(VERSION) ($$BUILD_TYPE)"; \
+	fi; \
+	BUILD_TYPE=$$(if echo "$(VERSION)" | grep -q -- "-dev$$"; then echo "dev"; else echo "prod"; fi); \
+	echo "Building Rancher $(RANCHER_MINOR) version $(VERSION) ($$BUILD_TYPE)"; \
+	echo "  Dockerfile: $$DOCKERFILE"; \
 	echo ""; \
-	echo "Configuration:"; \
-	echo "  Build type: $$BUILD_TYPE"; \
-	echo "  Charts branch: $$CHART_BRANCH (commit: $${CHART_COMMIT:0:8})"; \
-	echo "  Partner branch: $$PARTNER_BRANCH (commit: $${PARTNER_COMMIT:0:8})"; \
-	echo "  RKE2 branch: $$RKE2_BRANCH (commit: $${RKE2_COMMIT:0:8})"; \
-	echo "  Rancher branch: $$RANCHER_BRANCH"; \
-	echo ""; \
-	echo "Building image..."; \
 	docker buildx build \
-		--file "$(DOCKERFILES_DIR)/Dockerfile.$(CHART_MAJOR)" \
+		--file "$$DOCKERFILE" \
 		--platform "$(TARGET_PLATFORMS)" \
-		--build-arg BUILD_TYPE=$$BUILD_TYPE \
-		--build-arg CHART_BRANCH=$$CHART_BRANCH \
-		--build-arg PARTNER_BRANCH=$$PARTNER_BRANCH \
-		--build-arg RKE2_BRANCH=$$RKE2_BRANCH \
-		--build-arg CHART_COMMIT=$$CHART_COMMIT \
-		--build-arg PARTNER_COMMIT=$$PARTNER_COMMIT \
-		--build-arg RKE2_COMMIT=$$RKE2_COMMIT \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_COMMIT=$$(git rev-parse HEAD) \
 		--build-arg BUILD_DATE=$$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-		--build-arg TARGET_BRANCH=$$RANCHER_BRANCH \
+		--build-arg TARGET_BRANCH=$$(yq eval ".chart-versions.\"$(RANCHER_MINOR)\".rancher-branch" config.yaml) \
 		--build-arg BUILD_URL="https://github.com/$(SOURCE_REPO)" \
 		--tag "$(IMAGE_REPO):$(VERSION)" \
 		--load \
-		. && \
-	echo "" && \
+		.; \
+	echo ""; \
 	echo "✅ Build complete: $(IMAGE_REPO):$(VERSION)"
 
 push-image: ## Push image (for use with ecm-distro-tools)
-	@if [ -z "$(CHART_MAJOR)" ] || [ -z "$(VERSION)" ]; then \
-		echo "❌ Error: CHART_MAJOR and VERSION required"; \
+	@if [ -z "$(RANCHER_MINOR)" ] || [ -z "$(VERSION)" ]; then \
+		echo "❌ Error: RANCHER_MINOR and VERSION required"; \
 		exit 1; \
 	fi
-	@eval $$(./scripts/get-build-vars.sh --major $(CHART_MAJOR) --version $(VERSION) --format shell); \
+	@eval $$(./scripts/get-build-vars.sh --major $(RANCHER_MINOR) --version $(VERSION) --format shell); \
 	docker buildx build \
-		--file "$(DOCKERFILES_DIR)/Dockerfile.$(CHART_MAJOR)" \
+		--file "$(DOCKERFILES_DIR)/Dockerfile.$(RANCHER_MINOR)" \
 		--platform "$(TARGET_PLATFORMS)" \
 		--build-arg BUILD_TYPE=$$BUILD_TYPE \
 		--build-arg CHART_BRANCH=$$CHART_BRANCH \
@@ -145,25 +137,22 @@ push-image: ## Push image (for use with ecm-distro-tools)
 		.
 
 build-all: ## Build all chart versions from lock.yaml with auto-generated versions
-	@echo "Building all chart versions from lock.yaml"
+	@echo "Building all Rancher minors with CalVer dev versions"
 	@echo ""
-	@CHART_MAJORS=$$(yq eval '.chart-versions | keys | .[]' lock.yaml); \
-	if [ -z "$$CHART_MAJORS" ]; then \
-		echo "❌ Error: No chart versions found in lock.yaml"; \
+	@RANCHER_MINORS=$$(go run main.go list-minors); \
+	if [ -z "$$RANCHER_MINORS" ]; then \
+		echo "❌ Error: No Rancher minors found in config.yaml"; \
 		exit 1; \
 	fi; \
-	BUILD_DATE=$$(date -u +%Y%m%d); \
-	GIT_SHORT=$$(git rev-parse --short HEAD); \
-	for major in $$CHART_MAJORS; do \
+	for minor in $$RANCHER_MINORS; do \
 		echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
-		echo "Building $$major"; \
+		echo "Building Rancher $$minor"; \
 		echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
-		MAJOR_NUM=$${major#v}; \
-		VERSION="$$major.0.0-dev.$$BUILD_DATE.$$GIT_SHORT"; \
-		echo "Auto-generated version: $$VERSION"; \
-		$(MAKE) build CHART_MAJOR=$$major VERSION=$$VERSION; \
+		VERSION=$$(go run main.go calver-dev-version --minor=$$minor); \
+		echo "Auto-generated CalVer version: $$VERSION"; \
+		$(MAKE) build RANCHER_MINOR=$$minor VERSION=$$VERSION; \
 		if [ $$? -ne 0 ]; then \
-			echo "❌ Build failed for $$major"; \
+			echo "❌ Build failed for Rancher $$minor"; \
 			exit 1; \
 		fi; \
 		echo ""; \
@@ -185,14 +174,14 @@ push-all: ## Build and push all chart versions to registry
 	@echo ""
 	@echo "Building and pushing all chart versions from lock.yaml"
 	@echo ""
-	@CHART_MAJORS=$$(yq eval '.chart-versions | keys | .[]' lock.yaml); \
-	if [ -z "$$CHART_MAJORS" ]; then \
+	@RANCHER_MINORS=$$(yq eval '.chart-versions | keys | .[]' lock.yaml); \
+	if [ -z "$$RANCHER_MINORS" ]; then \
 		echo "❌ Error: No chart versions found in lock.yaml"; \
 		exit 1; \
 	fi; \
 	BUILD_DATE=$$(date -u +%Y%m%d); \
 	GIT_SHORT=$$(git rev-parse --short HEAD); \
-	for major in $$CHART_MAJORS; do \
+	for major in $$RANCHER_MINORS; do \
 		echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
 		echo "Building and pushing $$major"; \
 		echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \

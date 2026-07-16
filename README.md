@@ -25,7 +25,7 @@ Use as an init container to copy charts to a shared volume:
 ```yaml
 initContainers:
   - name: charts-copy
-    image: ghcr.io/rancher/rancher-assets:v1.0.0
+    image: ghcr.io/rancher/rancher-assets:v2.14-<ISO8601>
     volumeMounts:
       - name: charts
         mountPath: /charts
@@ -35,12 +35,18 @@ The image automatically runs `/usr/local/bin/copy-charts` which copies bundled c
 
 ## Versioning
 
-Chart major versions align with Rancher minor releases:
+CalVer with Rancher-minor aligned prefixes:
 
-| Chart Major | Rancher Version | Status |
-|-------------|-----------------|--------|
-| v0.x        | 2.14.x          | Active |
-| v1.x        | 2.15.x          | Active |
+| Version Prefix | Rancher Version | Status |
+|----------------|-----------------|--------|
+| v2.14-         | 2.14.x          | Active |
+| v2.15-         | 2.15.x          | Active |
+
+**Format:** `v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]`
+
+**Examples:**
+- `v2.14-20260716T1430Z` - Stable release for Rancher 2.14
+- `v2.15-20260805T1600Z-dev` - Pre-release for Rancher 2.15
 
 See [VERSION.md](VERSION.md) for complete versioning strategy and release workflows.
 

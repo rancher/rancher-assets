@@ -1,5 +1,5 @@
 # Rancher Assets Configuration
-# Defines chart major versions and their upstream source configurations
+# Defines Rancher minor versions and their upstream source configurations
 # This file is STATIC - only changes when adding new Rancher minors or updating base images
 
 # Base images (BCI versions)
@@ -7,8 +7,8 @@ base-image:
   bci-version: "16.0"
 
 chart-versions:
-  # Charts v0.x series for Rancher 2.14.x
-  v0:
+  # Rancher 2.14.x
+  "2.14":
     rancher-branch: release/v2.14
     prod:
       charts-branch: release-v2.14
@@ -19,8 +19,8 @@ chart-versions:
       partner-branch: main
       rke2-branch: main
 
-  # Charts v1.x series for Rancher 2.15.x
-  v1:
+  # Rancher 2.15.x
+  "2.15":
     rancher-branch: release/v2.15
     prod:
       charts-branch: release-v2.15

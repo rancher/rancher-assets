@@ -1,5 +1,8 @@
 name: Build and Release
 
+# Tier 2 Workflow: Triggered by CalVer tags to build and push Docker images
+# Tier 1 workflows (auto-prerelease.yml or manual scripts) create the tags
+
 on:
   push:
     tags:
@@ -18,33 +21,46 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.parse.outputs.version }}
-      major: ${{ steps.parse.outputs.major }}
+      rancher_minor: ${{ steps.parse.outputs.rancher_minor }}
       build_type: ${{ steps.parse.outputs.build_type }}
       release_id: ${{ steps.create_release.outputs.id }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - name: Parse tag
+      - name: Parse CalVer tag
         id: parse
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
-          MAJOR=$(echo $VERSION | cut -d. -f1)
+          echo "Parsing tag: $VERSION"
 
-          # Detect build type from tag format
-          # Clean semver (v1.0.0) = prod, anything else (v1.0.0-rc.1) = dev
-          if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            BUILD_TYPE=prod
-            PRERELEASE=false
-            echo "Clean semver detected - PROD build"
-          else
+          # CalVer format: v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]
+          # Examples:
+          #   v2.15-20260716T1430Z-dev  (prerelease/dev build)
+          #   v2.14-20260805T1600Z      (stable/prod build)
+
+          if [[ "$VERSION" =~ ^v([0-9]+\.[0-9]+)-[0-9]{8}T[0-9]{4}Z-dev$ ]]; then
+            # Dev build (has -dev suffix)
+            RANCHER_MINOR="${BASH_REMATCH[1]}"
             BUILD_TYPE=dev
             PRERELEASE=true
-            echo "Prerelease detected - DEV build"
+            echo "✅ CalVer prerelease detected - DEV build"
+            echo "   Rancher Minor: $RANCHER_MINOR"
+          elif [[ "$VERSION" =~ ^v([0-9]+\.[0-9]+)-[0-9]{8}T[0-9]{4}Z$ ]]; then
+            # Prod build (no -dev suffix)
+            RANCHER_MINOR="${BASH_REMATCH[1]}"
+            BUILD_TYPE=prod
+            PRERELEASE=false
+            echo "✅ CalVer stable detected - PROD build"
+            echo "   Rancher Minor: $RANCHER_MINOR"
+          else
+            echo "❌ ERROR: Invalid CalVer tag format: $VERSION"
+            echo "Expected: v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]"
+            exit 1
           fi
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "major=$MAJOR" >> $GITHUB_OUTPUT
+          echo "rancher_minor=$RANCHER_MINOR" >> $GITHUB_OUTPUT
           echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
           echo "prerelease=$PRERELEASE" >> $GITHUB_OUTPUT
 
@@ -62,7 +78,7 @@ jobs:
         run: |
           BODY=$(.github/scripts/generate-release-notes.sh \
             "${{ steps.parse.outputs.version }}" \
-            "${{ steps.parse.outputs.major }}" \
+            "${{ steps.parse.outputs.rancher_minor }}" \
             "${{ steps.parse.outputs.build_type }}" \
             --draft \
             --tag-message "${{ steps.tag_message.outputs.message }}")
@@ -118,7 +134,7 @@ jobs:
 
           make-target: push-image
         env:
-          CHART_MAJOR: ${{ needs.parse-tag.outputs.major }}
+          RANCHER_MINOR: ${{ needs.parse-tag.outputs.rancher_minor }}
           VERSION: ${{ needs.parse-tag.outputs.version }}
           GIT_COMMIT: ${{ github.sha }}
           BUILD_DATE: ${{ github.event.head_commit.timestamp }}
@@ -146,7 +162,7 @@ jobs:
       - name: Generate image lists
         run: |
           make export-images \
-            CHART_MAJOR=${{ needs.parse-tag.outputs.major }} \
+            RANCHER_MINOR=${{ needs.parse-tag.outputs.rancher_minor }} \
             VERSION=${{ needs.parse-tag.outputs.version }} \
             IMAGE_REPO=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}
 
@@ -178,7 +194,7 @@ jobs:
         run: |
           .github/scripts/generate-release-notes.sh \
             "${{ needs.parse-tag.outputs.version }}" \
-            "${{ needs.parse-tag.outputs.major }}" \
+            "${{ needs.parse-tag.outputs.rancher_minor }}" \
             "${{ needs.parse-tag.outputs.build_type }}" \
             --tag-message "${{ steps.tag_message.outputs.message }}" \
             > /tmp/release-notes.md
@@ -204,8 +220,8 @@ jobs:
       - name: Get Rancher target branch
         id: rancher
         run: |
-          MAJOR=${{ needs.parse-tag.outputs.major }}
-          RANCHER_BRANCH=$(yq eval ".chart-versions.\"${MAJOR}\".rancher-branch" config.yaml)
+          RANCHER_MINOR=${{ needs.parse-tag.outputs.rancher_minor }}
+          RANCHER_BRANCH=$(yq eval ".chart-versions.\"${RANCHER_MINOR}\".rancher-branch" config.yaml)
           echo "branch=$RANCHER_BRANCH" >> $GITHUB_OUTPUT
 
       - name: Create PR to rancher/rancher
@@ -215,7 +231,7 @@ jobs:
 
           PR_BODY=$(.github/scripts/generate-rancher-pr-body.sh \
             "$VERSION" \
-            "${{ needs.parse-tag.outputs.major }}" \
+            "${{ needs.parse-tag.outputs.rancher_minor }}" \
             "$IMAGE")
 
           gh pr create --repo rancher/rancher \

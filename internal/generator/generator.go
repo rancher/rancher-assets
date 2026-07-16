@@ -12,70 +12,71 @@ import (
 
 // TemplateData holds the data for Dockerfile template rendering
 type TemplateData struct {
-	BciVersion           string
-	DefaultChartsBranch  string
-	DefaultPartnerBranch string
-	DefaultRke2Branch    string
-	ChartCommit          string
-	PartnerCommit        string
-	Rke2Commit           string
-	ClusterRepos         map[string]config.ClusterRepoConfig
-	ChartMajor           string
-	RancherVersion       string
+	BciVersion   string
+	RancherMinor string
+
+	// Dev configuration
+	DevChartsBranch  string
+	DevChartCommit   string
+	DevPartnerBranch string
+	DevPartnerCommit string
+	DevRke2Branch    string
+	DevRke2Commit    string
+
+	// Prod configuration
+	ProdChartsBranch  string
+	ProdChartCommit   string
+	ProdPartnerBranch string
+	ProdPartnerCommit string
+	ProdRke2Branch    string
+	ProdRke2Commit    string
+
+	// Common
+	ClusterRepos   map[string]config.ClusterRepoConfig
+	RancherVersion string
 }
 
-// Generate creates a Dockerfile for the specified chart major version
-func Generate(cfg *config.Config, lock *lockfile.Lock, major string, outputDir string) error {
+// Generate creates TWO Dockerfiles for the specified Rancher minor version:
+// - Dockerfile.{minor} (prod/stable)
+// - Dockerfile.{minor}-dev (dev/prerelease)
+func Generate(cfg *config.Config, lock *lockfile.Lock, minor string, outputDir string) error {
 	// Get chart version config
-	chartCfg, err := cfg.GetChartVersion(major)
+	chartCfg, err := cfg.GetChartVersion(minor)
 	if err != nil {
 		return err
 	}
 
-	// Use dev branches as defaults (most common for local development)
-	// CI will override these based on tag format
-	buildCfg := chartCfg.Dev
-
 	// Extract Rancher version from rancher-branch (e.g., "release/v2.15" -> "2.15.x")
 	rancherVersion := extractRancherVersion(chartCfg.RancherBranch)
 
-	// Get commits from lock file (use dev refs as defaults in Dockerfile)
-	var chartCommit, partnerCommit, rke2Commit string
-	if chartLock, exists := lock.ChartVersions[major]; exists {
-		chartCommit = chartLock.UpstreamRefs.Dev.Charts.Commit
-		partnerCommit = chartLock.UpstreamRefs.Dev.Partner.Commit
-		rke2Commit = chartLock.UpstreamRefs.Dev.Rke2.Commit
+	// Get commits from lock file
+	chartLock, exists := lock.ChartVersions[minor]
+	if !exists {
+		return fmt.Errorf("no lock data found for Rancher minor %s", minor)
 	}
 
-	// Use placeholder if commits not available (shouldn't happen after generation)
-	if chartCommit == "" {
-		chartCommit = "HEAD"
-	}
-	if partnerCommit == "" {
-		partnerCommit = "HEAD"
-	}
-	if rke2Commit == "" {
-		rke2Commit = "HEAD"
-	}
-
-	// Prepare template data
+	// Prepare template data with BOTH dev and prod configurations
 	data := TemplateData{
-		BciVersion:           cfg.BaseImage.BciVersion,
-		DefaultChartsBranch:  buildCfg.ChartsBranch,
-		DefaultPartnerBranch: buildCfg.PartnerBranch,
-		DefaultRke2Branch:    buildCfg.Rke2Branch,
-		ChartCommit:          chartCommit,
-		PartnerCommit:        partnerCommit,
-		Rke2Commit:           rke2Commit,
-		ClusterRepos:         cfg.ClusterRepos,
-		ChartMajor:           major,
-		RancherVersion:       rancherVersion,
-	}
+		BciVersion:     cfg.BaseImage.BciVersion,
+		RancherMinor:   minor,
+		RancherVersion: rancherVersion,
+		ClusterRepos:   cfg.ClusterRepos,
 
-	// Parse template
-	tmpl, err := template.New("dockerfile").Parse(DockerfileTemplate)
-	if err != nil {
-		return fmt.Errorf("failed to parse Dockerfile template: %w", err)
+		// Dev configuration
+		DevChartsBranch:  chartCfg.Dev.ChartsBranch,
+		DevChartCommit:   chartLock.UpstreamRefs.Dev.Charts.Commit,
+		DevPartnerBranch: chartCfg.Dev.PartnerBranch,
+		DevPartnerCommit: chartLock.UpstreamRefs.Dev.Partner.Commit,
+		DevRke2Branch:    chartCfg.Dev.Rke2Branch,
+		DevRke2Commit:    chartLock.UpstreamRefs.Dev.Rke2.Commit,
+
+		// Prod configuration
+		ProdChartsBranch:  chartCfg.Prod.ChartsBranch,
+		ProdChartCommit:   chartLock.UpstreamRefs.Prod.Charts.Commit,
+		ProdPartnerBranch: chartCfg.Prod.PartnerBranch,
+		ProdPartnerCommit: chartLock.UpstreamRefs.Prod.Partner.Commit,
+		ProdRke2Branch:    chartCfg.Prod.Rke2Branch,
+		ProdRke2Commit:    chartLock.UpstreamRefs.Prod.Rke2.Commit,
 	}
 
 	// Ensure output directory exists
@@ -83,8 +84,29 @@ func Generate(cfg *config.Config, lock *lockfile.Lock, major string, outputDir s
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
+	// Generate PROD Dockerfile
+	if err := generateDockerfile(outputDir, minor, "", data, DockerfileProdTemplate); err != nil {
+		return fmt.Errorf("failed to generate prod Dockerfile: %w", err)
+	}
+
+	// Generate DEV Dockerfile
+	if err := generateDockerfile(outputDir, minor, "-dev", data, DockerfileDevTemplate); err != nil {
+		return fmt.Errorf("failed to generate dev Dockerfile: %w", err)
+	}
+
+	return nil
+}
+
+// generateDockerfile renders a template to a file
+func generateDockerfile(outputDir, minor, suffix string, data TemplateData, tmplStr string) error {
+	// Parse template
+	tmpl, err := template.New("dockerfile").Parse(tmplStr)
+	if err != nil {
+		return fmt.Errorf("failed to parse Dockerfile template: %w", err)
+	}
+
 	// Create output file
-	outputPath := filepath.Join(outputDir, fmt.Sprintf("Dockerfile.%s", major))
+	outputPath := filepath.Join(outputDir, fmt.Sprintf("Dockerfile.%s%s", minor, suffix))
 	file, err := os.Create(outputPath)
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)

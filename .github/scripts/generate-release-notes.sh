@@ -5,26 +5,26 @@ usage() {
     cat <<EOF
 Generate release notes for rancher-assets release.
 
-Usage: $0 <version> <major> <build-type> [--draft] [--tag-message <message>]
+Usage: $0 <version> <rancher-minor> <build-type> [--draft] [--tag-message <message>]
 
 Required:
-  version       Version tag (e.g., v1.0.0)
-  major         Chart major (e.g., v1)
-  build-type    Build type (prod or dev)
+  version        CalVer version tag (e.g., v2.15-20260805T1600Z)
+  rancher-minor  Rancher minor (e.g., 2.15)
+  build-type     Build type (prod or dev)
 
 Optional:
   --draft              Include draft warning message
   --tag-message <msg>  Include tag message in release notes
 
 Example:
-  $0 v1.0.0 v1 prod
-  $0 v1.0.0-rc.1 v1 dev --draft
+  $0 v2.15-20260805T1600Z 2.15 prod
+  $0 v2.15-20260716T1430Z-dev 2.15 dev --draft
 EOF
     exit 1
 }
 
 VERSION=""
-MAJOR=""
+RANCHER_MINOR=""
 BUILD_TYPE=""
 DRAFT=false
 TAG_MESSAGE=""
@@ -35,7 +35,7 @@ if [ $# -lt 3 ]; then
 fi
 
 VERSION="$1"
-MAJOR="$2"
+RANCHER_MINOR="$2"
 BUILD_TYPE="$3"
 shift 3
 
@@ -62,13 +62,13 @@ done
 
 # Get build vars to populate upstream info
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-eval $(${SCRIPT_DIR}/../../scripts/get-build-vars.sh --major "$MAJOR" --version "$VERSION" --format shell 2>/dev/null || echo "")
+eval $(${SCRIPT_DIR}/../../scripts/get-build-vars.sh --minor "$RANCHER_MINOR" --version "$VERSION" --format shell 2>/dev/null || echo "")
 
 # Start building release notes
 cat <<EOF
 ## Rancher Assets ${VERSION}
 
-**Chart Major**: ${MAJOR}
+**Rancher Minor**: ${RANCHER_MINOR}
 **Build Type**: ${BUILD_TYPE}
 **Target Branch**: ${RANCHER_BRANCH}
 EOF

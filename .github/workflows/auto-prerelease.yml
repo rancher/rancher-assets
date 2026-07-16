@@ -1,0 +1,105 @@
+name: Auto Pre-release
+
+# Tier 1 Workflow: Detects lock.yaml changes and creates CalVer dev tags
+# This triggers Tier 2 (release.yml) which builds the Docker images
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lock.yaml'
+      - 'dockerfiles/**'
+      - 'config.yaml'
+
+permissions:
+  contents: write  # Needed to create and push tags
+
+jobs:
+  detect-and-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to detect changes
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Detect changed Rancher minors
+        id: detect
+        run: |
+          echo "Detecting changes in lock.yaml between HEAD^ and HEAD..."
+          CHANGED_MINORS=$(go run main.go changed-minors --from=HEAD^ --to=HEAD)
+
+          echo "changed_minors=$CHANGED_MINORS" >> $GITHUB_OUTPUT
+          echo "Changed Rancher minors: $CHANGED_MINORS"
+
+          if [ "$CHANGED_MINORS" = "[]" ]; then
+            echo "no_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "no_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Exit if no changes
+        if: steps.detect.outputs.no_changes == 'true'
+        run: |
+          echo "No changes detected in lock.yaml - skipping tag creation"
+          exit 0
+
+      - name: Generate release plan
+        if: steps.detect.outputs.no_changes == 'false'
+        id: plan
+        run: |
+          echo "Planning CalVer pre-release versions..."
+          RELEASE_PLAN=$(go run main.go plan-release \
+            --type=auto \
+            --changed-minors='${{ steps.detect.outputs.changed_minors }}')
+
+          echo "Release Plan:"
+          echo "$RELEASE_PLAN" | jq .
+
+          # Save plan for next step
+          echo "$RELEASE_PLAN" > /tmp/release-plan.json
+
+      - name: Create and push tags
+        if: steps.detect.outputs.no_changes == 'false'
+        run: |
+          COMMIT_SHA=$(git rev-parse HEAD)
+
+          echo "Creating CalVer dev tags..."
+          cat /tmp/release-plan.json | jq -c '.[]' | while read -r release; do
+            MINOR=$(echo "$release" | jq -r '.rancher_minor')
+            VERSION=$(echo "$release" | jq -r '.version')
+            RTYPE=$(echo "$release" | jq -r '.release_type')
+
+            echo ""
+            echo "Creating tag $VERSION for Rancher $MINOR ($RTYPE) at $COMMIT_SHA"
+
+            # Create annotated tag
+            git tag -a "$VERSION" "$COMMIT_SHA" -m "Auto pre-release: $VERSION
+
+          Rancher Minor: $MINOR
+          Triggered by: commit $COMMIT_SHA
+          Changed minors: ${{ steps.detect.outputs.changed_minors }}
+          Workflow: ${{ github.workflow }}
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+            # Push tag
+            git push origin "$VERSION"
+            echo "✅ Pushed tag $VERSION"
+          done
+
+      - name: Summary
+        if: steps.detect.outputs.no_changes == 'false'
+        run: |
+          echo "## Auto Pre-release Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Created CalVer dev tags for changed Rancher minors:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat /tmp/release-plan.json | jq -r '.[] | "- `\(.version)` (Rancher \(.rancher_minor))"' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "These tags will trigger the [release workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/release.yml) to build Docker images." >> $GITHUB_STEP_SUMMARY

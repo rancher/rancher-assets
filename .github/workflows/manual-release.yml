@@ -1,0 +1,120 @@
+name: Manual Release
+
+# Tier 1 Workflow: Manually trigger CalVer tag creation
+# This can also be done locally via: make release-manual RELEASE=stable MINOR=2.15
+# This workflow triggers Tier 2 (release.yml) which builds the Docker images
+
+on:
+  workflow_dispatch:
+    inputs:
+      rancher_minor:
+        description: 'Rancher minor version (e.g., 2.15) or empty for ALL'
+        required: false
+        type: string
+      release_type:
+        description: 'Release type'
+        required: true
+        type: choice
+        options:
+          - prerelease
+          - stable
+        default: 'prerelease'
+      commit_sha:
+        description: 'Commit SHA to tag (leave empty for HEAD)'
+        required: false
+        type: string
+
+permissions:
+  contents: write  # Needed to create and push tags
+
+jobs:
+  create-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for commit SHA resolution
+          ref: ${{ inputs.commit_sha || github.sha }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Determine Rancher minors
+        id: minors
+        run: |
+          if [ -n "${{ inputs.rancher_minor }}" ]; then
+            MINORS='["${{ inputs.rancher_minor }}"]'
+            echo "Releasing only Rancher minor: ${{ inputs.rancher_minor }}"
+          else
+            MINORS=$(yq eval '.chart-versions | keys | .[]' config.yaml | jq -R -s -c 'split("\n")[:-1]')
+            echo "Releasing ALL active Rancher minors"
+          fi
+
+          echo "minors=$MINORS" >> $GITHUB_OUTPUT
+          echo "Rancher minors: $MINORS"
+
+      - name: Generate release plan
+        id: plan
+        run: |
+          echo "Planning CalVer ${{ inputs.release_type }} versions..."
+          RELEASE_PLAN=$(go run main.go plan-release \
+            --type=manual \
+            --minors='${{ steps.minors.outputs.minors }}' \
+            --release="${{ inputs.release_type }}")
+
+          echo "Release Plan:"
+          echo "$RELEASE_PLAN" | jq .
+
+          # Save plan for next step
+          echo "$RELEASE_PLAN" > /tmp/release-plan.json
+
+      - name: Confirm release plan
+        run: |
+          echo "## Release Plan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Release Type:** ${{ inputs.release_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit SHA:** ${GITHUB_SHA}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags to create:**" >> $GITHUB_STEP_SUMMARY
+          cat /tmp/release-plan.json | jq -r '.[] | "- `\(.version)` (Rancher \(.rancher_minor))"' >> $GITHUB_STEP_SUMMARY
+
+      - name: Create and push tags
+        run: |
+          COMMIT_SHA=$(git rev-parse HEAD)
+
+          echo "Creating CalVer tags..."
+          cat /tmp/release-plan.json | jq -c '.[]' | while read -r release; do
+            MINOR=$(echo "$release" | jq -r '.rancher_minor')
+            VERSION=$(echo "$release" | jq -r '.version')
+            RTYPE=$(echo "$release" | jq -r '.release_type')
+
+            echo ""
+            echo "Creating tag $VERSION for Rancher $MINOR ($RTYPE) at $COMMIT_SHA"
+
+            # Create annotated tag
+            git tag -a "$VERSION" "$COMMIT_SHA" -m "Manual $RTYPE release: $VERSION
+
+          Rancher Minor: $MINOR
+          Release Type: $RTYPE
+          Commit: $COMMIT_SHA
+          Triggered by: @${{ github.actor }} via GitHub workflow
+          Workflow: ${{ github.workflow }}
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+            # Push tag
+            git push origin "$VERSION"
+            echo "✅ Pushed tag $VERSION"
+          done
+
+      - name: Summary
+        run: |
+          echo "## Manual Release Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Created CalVer ${{ inputs.release_type }} tags:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat /tmp/release-plan.json | jq -r '.[] | "- `\(.version)` (Rancher \(.rancher_minor))"' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "These tags will trigger the [release workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/release.yml) to build Docker images." >> $GITHUB_STEP_SUMMARY

@@ -2,14 +2,14 @@
 set -e
 
 VERSION="$1"
-MAJOR="$2"
+RANCHER_MINOR="$2"
 IMAGE="$3"
 
 cat <<EOF
 ## Rancher Assets Update
 
 **Version**: \`${VERSION}\`
-**Chart Major**: \`${MAJOR}\`
+**Rancher Minor**: \`${RANCHER_MINOR}\`
 **Image**: \`${IMAGE}\`
 
 ### Changes

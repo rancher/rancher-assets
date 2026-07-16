@@ -7,7 +7,7 @@ type Config struct {
 	ClusterRepos  map[string]ClusterRepoConfig  `yaml:"cluster-repos"`
 }
 
-// ChartVersionConfig defines a chart major version configuration (e.g., v0, v1)
+// ChartVersionConfig defines a Rancher minor version configuration (e.g., 2.14, 2.15)
 type ChartVersionConfig struct {
 	RancherBranch string      `yaml:"rancher-branch"`
 	Prod          BuildConfig `yaml:"prod"`

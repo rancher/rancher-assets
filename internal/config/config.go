@@ -84,11 +84,11 @@ func validateBuildConfig(major, buildType string, cfg BuildConfig) error {
 	return nil
 }
 
-// GetBuildConfig returns the build configuration for a specific chart major and build type
+// GetBuildConfig returns the build configuration for a specific Rancher minor and build type
 func (c *Config) GetBuildConfig(major string, buildType BuildType) (*BuildConfig, error) {
 	chartCfg, exists := c.ChartVersions[major]
 	if !exists {
-		return nil, fmt.Errorf("chart major %s not found in config", major)
+		return nil, fmt.Errorf("Rancher minor %s not found in config", major)
 	}
 
 	switch buildType {
@@ -101,20 +101,26 @@ func (c *Config) GetBuildConfig(major string, buildType BuildType) (*BuildConfig
 	}
 }
 
-// GetChartVersion returns the chart version config for a specific major
+// GetChartVersion returns the chart version config for a specific Rancher minor
 func (c *Config) GetChartVersion(major string) (*ChartVersionConfig, error) {
 	chartCfg, exists := c.ChartVersions[major]
 	if !exists {
-		return nil, fmt.Errorf("chart major %s not found in config", major)
+		return nil, fmt.Errorf("Rancher minor %s not found in config", major)
 	}
 	return &chartCfg, nil
 }
 
-// ListChartMajors returns a list of all chart major versions
-func (c *Config) ListChartMajors() []string {
-	majors := make([]string, 0, len(c.ChartVersions))
-	for major := range c.ChartVersions {
-		majors = append(majors, major)
+// ListRancherMinors returns a list of all Rancher minor versions
+func (c *Config) ListRancherMinors() []string {
+	minors := make([]string, 0, len(c.ChartVersions))
+	for minor := range c.ChartVersions {
+		minors = append(minors, minor)
 	}
-	return majors
+	return minors
+}
+
+// ListChartMajors is deprecated - use ListRancherMinors instead
+// Kept for backwards compatibility during migration
+func (c *Config) ListChartMajors() []string {
+	return c.ListRancherMinors()
 }

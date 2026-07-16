@@ -7,7 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ChangedMajors compares two lock files and returns chart majors with upstream ref changes.
+// ChangedMajors compares two lock files and returns Rancher minors with upstream ref changes.
 // Ignores timestamp changes (fetched-at) and only reports actual commit changes.
 func ChangedMajors(fromCommit, toCommit string) ([]string, error) {
 	// Load lock files from commits

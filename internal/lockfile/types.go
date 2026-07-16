@@ -10,7 +10,7 @@ type Lock struct {
 	GeneratorVersion string                      `yaml:"generator-version"`
 }
 
-// ChartVersionLock tracks state for a single chart major version
+// ChartVersionLock tracks state for a single Rancher minor version
 type ChartVersionLock struct {
 	LatestStable     *string             `yaml:"latest-stable"`
 	LatestPrerelease *string             `yaml:"latest-prerelease"`

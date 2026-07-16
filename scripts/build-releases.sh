@@ -1,13 +1,12 @@
 #!/bin/bash
 set -e
 
-# Source versions helper functions
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/versions-helpers.sh"
+# Local debug script to build images with CalVer dev versions
+# Generates CalVer timestamps for all Rancher minors and builds them locally
 
 usage() {
     cat <<EOF
-Build release images from lock.yaml (stable or prerelease).
+Build all Rancher minors with auto-generated CalVer dev versions.
 
 Usage: $0 [--with-lists]
 
@@ -17,6 +16,8 @@ Options:
 Example:
   $0
   $0 --with-lists
+
+Note: This is LOCAL DEBUG ONLY. Use GitHub Actions workflows for production releases.
 EOF
     exit 1
 }
@@ -44,51 +45,39 @@ echo "⚠️  LOCAL DEBUG BUILD - NOT FOR PRODUCTION RELEASES"
 echo "⚠️  Use GitHub Actions workflows for real releases"
 echo "⚠️  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Building release versions from lock.yaml..."
+echo "Building all Rancher minors with CalVer dev versions..."
 echo ""
 
-CHART_MAJORS=$(yq eval '.chart-versions | keys | .[]' lock.yaml)
-if [ -z "$CHART_MAJORS" ]; then
-    echo "❌ Error: No chart versions found in lock.yaml"
+RANCHER_MINORS=$(yq eval '.chart-versions | keys | .[]' config.yaml)
+if [ -z "$RANCHER_MINORS" ]; then
+    echo "❌ Error: No Rancher minors found in config.yaml"
     exit 1
 fi
 
 BUILT_COUNT=0
 VERSIONS_BUILT=()
 
-for major in $CHART_MAJORS; do
-    # Try to get stable version from versions branch
-    VERSION=$(versions_get "$major" "stable" 2>/dev/null || echo "")
-    VERSION_TYPE="stable"
-
-    # Fall back to prerelease if no stable
-    if [ -z "$VERSION" ]; then
-        VERSION=$(versions_get "$major" "prerelease" 2>/dev/null || echo "")
-        VERSION_TYPE="prerelease"
-    fi
-
-    if [ -z "$VERSION" ]; then
-        echo "⏭️  Skipping $major (no stable or prerelease version in versions branch)"
-        continue
-    fi
+for minor in $RANCHER_MINORS; do
+    # Generate CalVer dev version for this minor
+    VERSION=$(go run main.go calver-dev-version --minor="$minor")
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Building $major at $VERSION ($VERSION_TYPE)"
+    echo "Building Rancher $minor at $VERSION (dev)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    make build CHART_MAJOR="$major" VERSION="$VERSION"
+    make build RANCHER_MINOR="$minor" VERSION="$VERSION"
     if [ $? -ne 0 ]; then
-        echo "❌ Build failed for $major"
+        echo "❌ Build failed for Rancher $minor"
         exit 1
     fi
 
     BUILT_COUNT=$((BUILT_COUNT + 1))
-    VERSIONS_BUILT+=("$major:$VERSION")
+    VERSIONS_BUILT+=("$minor:$VERSION")
     echo ""
 done
 
 if [ $BUILT_COUNT -eq 0 ]; then
-    echo "⚠️  No releases built - no chart versions have latest-stable or latest-prerelease set"
+    echo "⚠️  No releases built"
     exit 1
 fi
 
@@ -108,16 +97,16 @@ if [ "$WITH_LISTS" = "true" ]; then
     EXPORTED_COUNT=0
 
     for version_entry in "${VERSIONS_BUILT[@]}"; do
-        major="${version_entry%%:*}"
+        minor="${version_entry%%:*}"
         version="${version_entry##*:}"
 
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "Exporting image lists for $major at $version"
+        echo "Exporting image lists for Rancher $minor at $version"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-        make export-images CHART_MAJOR="$major" VERSION="$version" LOCAL=true
+        make export-images RANCHER_MINOR="$minor" VERSION="$version" LOCAL=true
         if [ $? -ne 0 ]; then
-            echo "❌ Image list export failed for $major"
+            echo "❌ Image list export failed for Rancher $minor"
             exit 1
         fi
 

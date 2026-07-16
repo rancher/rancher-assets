@@ -51,7 +51,7 @@ func (l *Lock) Save(path string) error {
 	return nil
 }
 
-// UpdateUpstreamRefs updates upstream commit references for a chart major version
+// UpdateUpstreamRefs updates upstream commit references for a Rancher minor version
 func (l *Lock) UpdateUpstreamRefs(major string, prodRefs, devRefs UpstreamRefsSet) error {
 	chartLock, exists := l.ChartVersions[major]
 	if !exists {

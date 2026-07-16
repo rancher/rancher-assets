@@ -2,49 +2,48 @@
 
 This document defines how rancher-assets handles versioning for chart images.
 
-## Chart Major Versions
+## Rancher-Minor Aligned CalVer
 
-This repository uses **chart major versions** (v0, v1, v2, etc.) that align with **Rancher minor versions**. Each chart major tracks a specific set of upstream chart repositories at branches corresponding to a Rancher release line.
+This repository uses **CalVer (Calendar Versioning)** with **Rancher minor version prefixes**. Each version explicitly shows which Rancher minor it's compatible with, using ISO 8601 timestamps to create unique, sortable versions.
 
-### Chart Major to Rancher Minor Alignment
+### Rancher Minor Alignment
 
-| Chart Major | Rancher Version | Charts Branch (prod) | Charts Branch (dev) | Status |
-|-------------|-----------------|---------------------|---------------------|---------|
-| v0          | 2.14.x          | release-v2.14       | dev-v2.14          | Active  |
-| v1          | 2.15.x          | release-v2.15       | dev-v2.15          | Active  |
+| Rancher Minor | Version Prefix | Charts Branch (prod) | Charts Branch (dev) | Status |
+|---------------|----------------|---------------------|---------------------|---------|
+| 2.14.x        | v2.14-         | release-v2.14       | dev-v2.14          | Active  |
+| 2.15.x        | v2.15-         | release-v2.15       | dev-v2.15          | Active  |
 
-**Note:** This table will grow as new Rancher minor versions are released. Each new Rancher minor (2.16, 2.17, etc.) gets a corresponding chart major (v2, v3, etc.).
+**Note:** This table will grow as new Rancher minor versions are released. Each new Rancher minor (2.16, 2.17, etc.) gets a corresponding version prefix (v2.16-, v2.17-, etc.).
 
 ## Version Format
 
-Chart images use semantic versioning with the chart major as the major version component:
+Chart images use CalVer with ISO 8601 timestamps:
 
 ### Production Releases (Stable)
 
-Production releases use clean semantic versioning:
+Production releases use UTC timestamps without the dev suffix:
 
 ```
-<chart-major>.<minor>.<patch>
+v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z
 ```
 
 **Examples:**
-- `v0.1.0` - First stable release for Rancher 2.14.x
-- `v0.2.0` - Minor release for Rancher 2.14.x
-- `v1.0.0` - First stable release for Rancher 2.15.x
-- `v1.2.3` - Maintenance release for Rancher 2.15.x
+- `v2.14-20260716T1430Z` - Rancher 2.14.3 GA release (July 16, 2026 at 14:30 UTC)
+- `v2.14-20260722T0915Z` - OOB release for Longhorn CVE (July 22, 2026 at 09:15 UTC)
+- `v2.15-20260805T1600Z` - Rancher 2.15.0 GA release (August 5, 2026 at 16:00 UTC)
 
 ### Pre-Releases
 
-Pre-releases use release candidate identifiers:
+Pre-releases use the same timestamp format with a `-dev` suffix:
 
 ```
-<chart-major>.<minor>.<patch>-rc.<number>
+v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z-dev
 ```
 
 **Examples:**
-- `v1.0.0-rc.1` - First release candidate for v1.0.0
-- `v1.0.0-rc.2` - Second release candidate for v1.0.0
-- `v0.1.1-rc.1` - Release candidate for patch release
+- `v2.14-20260819T1130Z-dev` - First RC for Rancher 2.14.4 (August 19, 2026 at 11:30 UTC)
+- `v2.14-20260819T1530Z-dev` - Second RC same day (time differentiates: 15:30 UTC)
+- `v2.15-20261212T1030Z-dev` - Alpha/RC for Rancher 2.15.0 (December 12, 2026 at 10:30 UTC)
 
 Pre-releases are:
 - **Auto-generated** when changes merge to main
@@ -52,57 +51,54 @@ Pre-releases are:
 - Built from appropriate **dev** or **prod** branches in lock.yaml
 - Intended for testing before promoting to stable
 
-## Version Tracking: Orphan Branch
+### Version Properties
 
-Versions are tracked on an **orphan branch** named `versions`, separate from code history on `main`.
+**Why CalVer works for rancher-assets:**
 
-### Why Orphan Branch?
+✅ **Rancher version explicit** - `v2.14-*` shows compatibility at a glance  
+✅ **OOB releases trivial** - Just use a new timestamp, no version arithmetic  
+✅ **No SemVer constraints** - Consumed as image tags (freeform strings)  
+✅ **Multiple releases per day** - Time component differentiates (T1130Z vs T1530Z)  
+✅ **Lexicographic sort** - ISO 8601 sorts correctly as strings  
+✅ **No mapping tables** - Version directly indicates Rancher minor  
+✅ **Self-generating** - Timestamps don't require sequence counters  
 
-✅ **No noise on main** - Version bumps don't clutter code history  
-✅ **Batch releases** - Multiple chart majors can share one commit  
-✅ **Clean audit trail** - Version history separate from code changes  
-✅ **No workflow loops** - Version updates don't trigger rebuilds  
+**Trade-offs:**
 
-### versions.yaml Structure
+⚠️ **Not SemVer compliant** - Irrelevant (no Helm chart, no parsers)  
+⚠️ **Cannot target specific Rancher patch** - All `v2.14-*` work with any 2.14.x  
+⚠️ **All timestamps in UTC** - Z suffix indicates Zulu time (UTC+0)
 
-```yaml
-# On orphan 'versions' branch
-v0:
-  stable:
-    tag: v0.1.0
-    updated-at: "2026-06-05T10:30:00Z"
-  prerelease:
-    tag: v0.1.1-rc.2
-    updated-at: "2026-06-05T11:45:00Z"
-v1:
-  stable:
-    tag: v1.2.0
-    updated-at: "2026-06-04T14:20:00Z"
-  prerelease:
-    tag: v1.3.0-rc.1
-    updated-at: "2026-06-05T12:00:00Z"
-```
+## Version Tracking: Git Tags
+
+Versions are tracked via **Git tags** pointing to commits on `main`. No separate branch needed since timestamps are self-generating.
+
+### Why Git Tags Only?
+
+✅ **Self-generating** - Timestamps created at release time, no sequence tracking  
+✅ **No noise on main** - Tags don't clutter code history  
+✅ **Simple audit trail** - Git tags show release history  
+✅ **No workflow loops** - Tag creation doesn't trigger rebuilds  
 
 ### Querying Versions
 
 ```bash
-# Checkout versions branch
-git checkout versions
+# All stable releases for Rancher 2.14
+git tag -l "v2.14-*" --sort=-version:refname | grep -v -- '-dev$'
 
-# Latest stable for v1
-yq '.v1.stable.tag' versions.yaml
-# v1.2.0
+# All pre-releases for Rancher 2.14
+git tag -l "v2.14-*" --sort=-version:refname | grep -- '-dev$'
 
-# Latest prerelease for v0
-yq '.v0.prerelease.tag' versions.yaml
-# v0.1.1-rc.2
+# Latest stable for Rancher 2.15
+git tag -l "v2.15-*" --sort=-version:refname | grep -v -- '-dev$' | head -1
+# v2.15-20260805T1600Z
 
-# When was v1 last stable released?
-yq '.v1.stable.updated-at' versions.yaml
-# 2026-06-04T14:20:00Z
+# When was a specific version released?
+git log -1 --format='%ai' v2.14-20260716T1430Z
+# 2026-07-16 14:30:00 +0000
 
-# Return to main
-git checkout main
+# What's in a release?
+git show v2.14-20260716T1430Z:lock.yaml
 ```
 
 ## Lock File: Upstream Commit Tracking Only
@@ -131,8 +127,8 @@ The build system automatically detects build type from the version tag:
 
 | Version Format | Build Type | Upstream Refs | Usage |
 |---------------|------------|---------------|-------|
-| `vX.Y.Z` (clean semver) | `prod` | `lock.yaml` → `upstream-refs.prod` | Production releases |
-| `vX.Y.Z-rc.N` | `dev` | `lock.yaml` → `upstream-refs.dev` | Pre-releases |
+| `v{RANCHER_MINOR}-{TIMESTAMP}Z` (no -dev) | `prod` | `lock.yaml` → `upstream-refs.prod` | Production releases |
+| `v{RANCHER_MINOR}-{TIMESTAMP}Z-dev` | `dev` | `lock.yaml` → `upstream-refs.dev` | Pre-releases |
 
 This detection happens in the workflow and determines which upstream branch/commit refs are used from lock.yaml.
 
@@ -150,13 +146,11 @@ This detection happens in the workflow and determines which upstream branch/comm
 - Generated by `make generate` on config/package/upstream changes
 
 **What it does:**
-1. Diffs lock.yaml to detect which chart majors have upstream ref changes
+1. Diffs lock.yaml to detect which Rancher minors have upstream ref changes
 2. Skips if only timestamps changed (no meaningful changes)
-3. Reads current versions from `versions` branch
-4. Auto-bumps prerelease versions (e.g., `v1.0.0-rc.1` → `v1.0.0-rc.2`)
-5. Creates git tags on the merge commit
-6. Updates `versions` branch
-7. Tag triggers build workflow
+3. Generates CalVer timestamps (UTC)
+4. Creates pre-release git tags with `-dev` suffix
+5. Tag triggers build workflow
 
 **Example:**
 ```
@@ -164,25 +158,18 @@ PR: Bump BCI version
   ↓
 Run: make generate (updates lock.yaml upstream refs)
   ↓
-Merge to main (commit abc123)
+Merge to main (commit abc123) at 2026-07-16 14:30:00 UTC
   ↓
 Auto-prerelease workflow detects:
   - lock.yaml changed
-  - Diffs upstream refs: v0 and v1 have new commits
+  - Diffs upstream refs: 2.14 and 2.15 have new commits
   ↓
-Reads versions branch:
-  v0.prerelease: v0.1.0-rc.3
-  v1.prerelease: v1.2.0-rc.1
-  ↓
-Auto-bumps:
-  v0.1.0-rc.3 → v0.1.0-rc.4
-  v1.2.0-rc.1 → v1.2.0-rc.2
+Generates timestamps:
+  Current UTC: 2026-07-16T1430Z
   ↓
 Creates tags on commit abc123:
-  - v0.1.0-rc.4
-  - v1.2.0-rc.2
-  ↓
-Updates versions branch
+  - v2.14-20260716T1430Z-dev
+  - v2.15-20260716T1430Z-dev
   ↓
 Build workflow builds both images from abc123
 ```
@@ -195,62 +182,57 @@ Build workflow builds both images from abc123
 
 **Inputs:**
 - `commit_sha` - Commit to release (default: HEAD of main)
-- `chart_major` - Which chart major (empty = ALL)
-- `bump_type` - `minor` or `patch`
+- `rancher_minor` - Which Rancher minor (e.g., 2.14, 2.15; empty = ALL)
 - `release_type` - `prerelease` (default) or `stable`
 
 **Use Cases:**
 
-#### Scenario A: Rancher 2.15 releases → v1 gets minor bump
+#### Scenario A: Rancher 2.15.0 GA release
 ```
 Release Team triggers:
   commit_sha: [empty] (uses HEAD)
-  chart_major: v1
-  bump_type: minor
+  rancher_minor: 2.15
   release_type: stable
 
 Result:
-  v1.2.0 → v1.3.0 (stable)
-  Tag created on HEAD of main
+  v2.15-20260805T1600Z (stable)
+  Tag created on HEAD of main at 16:00 UTC
 ```
 
-#### Scenario B: Critical patch for v0 only
+#### Scenario B: OOB release for Rancher 2.14.3
 ```
 Release Team triggers:
   commit_sha: def456
-  chart_major: v0
-  bump_type: patch
+  rancher_minor: 2.14
   release_type: stable
 
 Result:
-  v0.1.0 → v0.1.1 (stable)
-  Tag created on commit def456
+  v2.14-20260722T0915Z (stable)
+  Tag created on commit def456 at 09:15 UTC
 ```
 
-#### Scenario C: BCI security fix affects all chart majors
+#### Scenario C: BCI security fix affects all Rancher minors
 ```
 Release Team triggers:
   commit_sha: abc123
-  chart_major: [empty] ← ALL
-  bump_type: patch
+  rancher_minor: [empty] ← ALL
   release_type: prerelease
 
 Result:
-  v0.1.0 → v0.1.1-rc.1
-  v1.2.0 → v1.2.1-rc.1
-  All tags on same commit abc123
+  v2.14-20260716T1430Z-dev
+  v2.15-20260716T1430Z-dev
+  All tags on same commit abc123 at 14:30 UTC
 ```
 
-#### Scenario D: Validate upcoming minor release
+#### Scenario D: RC for upcoming Rancher 2.14.4
 ```
 Release Team triggers:
   commit_sha: [empty]
-  chart_major: v1
-  bump_type: minor
+  rancher_minor: 2.14
   release_type: prerelease
 
 Result:
-  v1.2.0 → v1.3.0-rc.1
+  v2.14-20260819T1130Z-dev
   Ready for validation before stable
 ```
 
@@ -269,16 +251,16 @@ Result:
 
 **Tag triggers build immediately:**
 ```
-Tag created: v1.0.0
+Tag created: v2.15-20260805T1600Z
   ↓
 build-release.yml triggers
   ↓
 Reads lock.yaml from tagged commit
   ↓
-Builds using prod refs (clean semver)
+Builds using prod refs (no -dev suffix = stable)
   ↓
 Pushes multi-arch image:
-  - ghcr.io/rancher/rancher-assets:v1.0.0 (linux/amd64, linux/arm64)
+  - ghcr.io/rancher/rancher-assets:v2.15-20260805T1600Z (linux/amd64, linux/arm64)
   ↓
 Creates GitHub Release
   ↓
@@ -297,31 +279,30 @@ git commit -m "Bump BCI to fix CVE"
 # 2. Create PR, merge to main
 # (PR reviewed, CI validates)
 
-# 3. Auto-prerelease workflow triggers
+# 3. Auto-prerelease workflow triggers at 14:30 UTC
 # - Detects changed dockerfiles
-# - Auto-bumps prereleases
-# - Creates tags
+# - Generates CalVer timestamps
+# - Creates tags with -dev suffix
 # - Builds images
 
 # 4. Images available for testing
-# ghcr.io/rancher/rancher-assets:v0.1.0-rc.4
-# ghcr.io/rancher/rancher-assets:v1.2.0-rc.2
+# ghcr.io/rancher/rancher-assets:v2.14-20260716T1430Z-dev
+# ghcr.io/rancher/rancher-assets:v2.15-20260716T1430Z-dev
 ```
 
 ### Stable Release Flow
 
 ```bash
 # 1. Release Team validates prerelease
-# Test v1.2.0-rc.2 in staging
+# Test v2.15-20260716T1430Z-dev in staging
 
 # 2. Release Team triggers manual workflow
 # Via GitHub UI:
-#   chart_major: v1
-#   bump_type: patch
+#   rancher_minor: 2.15
 #   release_type: stable
 
-# 3. Workflow creates stable tag
-# v1.2.0 created on tested commit
+# 3. Workflow creates stable tag at 16:00 UTC
+# v2.15-20260805T1600Z created on tested commit
 
 # 4. Build workflow runs
 # - Builds with prod refs
@@ -329,35 +310,34 @@ git commit -m "Bump BCI to fix CVE"
 # - Creates PR to rancher/rancher
 
 # 5. Rancher PR merged
-# rancher/rancher picks up v1.2.0
+# rancher/rancher picks up v2.15-20260805T1600Z
 ```
 
 ### Querying Release History
 
 ```bash
-# All stable releases for v1
-git tag -l "v1.*" --sort=-version:refname | grep -v '-'
+# All stable releases for Rancher 2.15
+git tag -l "v2.15-*" --sort=-version:refname | grep -v -- '-dev$'
 
-# Latest stable for v1
-git tag -l "v1.*" --sort=-version:refname | grep -v '-' | head -1
+# Latest stable for Rancher 2.15
+git tag -l "v2.15-*" --sort=-version:refname | grep -v -- '-dev$' | head -1
 
-# All prereleases for current v0 minor
-git tag -l "v0.1.*-rc.*" --sort=-version:refname
+# All prereleases for Rancher 2.14
+git tag -l "v2.14-*" --sort=-version:refname | grep -- '-dev$'
 
-# What commit was v1.2.0 built from?
-git rev-parse v1.2.0
+# What commit was v2.15-20260805T1600Z built from?
+git rev-parse v2.15-20260805T1600Z
 
-# View lock state at v1.2.0
-git show v1.2.0:lock.yaml
+# View lock state at v2.15-20260805T1600Z
+git show v2.15-20260805T1600Z:lock.yaml
 ```
 
 ## Repository Structure
 
-Each chart major has:
-- **Dockerfile** - `dockerfiles/Dockerfile.v0`, `dockerfiles/Dockerfile.v1`, etc.
+Each Rancher minor has:
+- **Dockerfile** - `dockerfiles/Dockerfile.v2.14`, `dockerfiles/Dockerfile.v2.15`, etc.
 - **Config** - Entry in `config.yaml` defining branches
 - **Lock state** - Entry in `lock.yaml` tracking commits
-- **Versions** - Entry in `versions.yaml` (on orphan branch) tracking releases
 
 ## Examples
 
@@ -365,18 +345,18 @@ Each chart major has:
 
 ```bash
 # Prerelease build (uses dev refs from lock.yaml)
-make build CHART_MAJOR=v1 VERSION=v1.0.0-rc.1
+make build RANCHER_MINOR=2.15 VERSION=v2.15-20260716T1430Z-dev
 
 # Stable build (uses prod refs from lock.yaml)
-make build CHART_MAJOR=v1 VERSION=v1.0.0
+make build RANCHER_MINOR=2.15 VERSION=v2.15-20260805T1600Z
 ```
 
-### Building All Chart Majors
+### Building All Rancher Minors
 
 ```bash
-# All dev builds with auto-generated versions
+# All dev builds with auto-generated CalVer versions
 make build-all
-# Produces: v0.0.0-dev.20260605.abc1234, v1.0.0-dev.20260605.abc1234, ...
+# Produces: v2.14-20260716T1430Z-dev, v2.15-20260716T1430Z-dev, ...
 
 # Push all dev builds to registry
 make push-all
@@ -385,7 +365,7 @@ make push-all
 
 ### Fork Versioning
 
-Forks can use the same versioning scheme with their own registry:
+Forks can use the same CalVer scheme with their own registry:
 
 ```bash
 make push-all \
@@ -393,7 +373,7 @@ make push-all \
   ORG=myorg \
   REPO=my-charts \
   SOURCE_REPO=myorg/rancher-assets
-# Produces: ghcr.io/myorg/my-charts:v0.0.0-dev.20260605.abc1234
+# Produces: ghcr.io/myorg/my-charts:v2.14-20260716T1430Z-dev
 ```
 
 ## Image Labels
@@ -414,34 +394,21 @@ io.rancher.rke2.commit=${RKE2_COMMIT}         # RKE2 commit SHA
 
 These labels provide full supply chain traceability for every image.
 
-## Initial Setup
-
-The `versions` orphan branch has been initialized with `versions.yaml` tracking all chart majors.
-
-To view or modify:
-
-```bash
-git checkout versions
-cat versions.yaml
-# Make changes if needed
-git checkout main
-```
-
 ## Summary
 
 **Version tracking:**
 - `main` branch: code, config, dockerfiles, lock.yaml (upstream commits only)
-- `versions` branch (orphan): versions.yaml (release versions only)
-- Git tags: point to commits, trigger builds
+- Git tags: CalVer timestamps, point to commits, trigger builds
 
 **Releases:**
-- **Auto prereleases**: On merge to main (for changed chart majors)
-- **Manual releases**: Release Team workflow_dispatch (full control)
+- **Auto prereleases**: On merge to main (for changed Rancher minors, with -dev suffix)
+- **Manual releases**: Release Team workflow_dispatch (full control over timing)
 - **Build on tag**: Automatic build + publish when tag created
 
 **Benefits:**
 - ✅ Clean code history (no version bump commits)
-- ✅ Batch releases (multiple majors, one commit)
-- ✅ Full audit trail (versions branch history)
+- ✅ Rancher version explicit (v2.14-, v2.15- prefix)
+- ✅ OOB releases trivial (just new timestamp)
+- ✅ No version arithmetic (timestamps self-generate)
 - ✅ Flexible control (auto + manual workflows)
-- ✅ No workflow loops (version updates isolated)
+- ✅ No workflow loops (tags don't trigger rebuilds)

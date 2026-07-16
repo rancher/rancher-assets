@@ -31,43 +31,27 @@ for arg in "$@"; do
 done
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Auto Pre-release Tag Creator"
+echo "Auto Pre-release Tag Creator (CalVer)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Detect changed majors
+# Detect changed Rancher minors
 echo "Detecting changes in lock.yaml between $FROM_REF and $TO_REF..."
-CHANGED_MAJORS_OUTPUT=$(go run main.go changed-majors --from="$FROM_REF" --to="$TO_REF" --verbose)
-CHANGED_MAJORS=$(echo "$CHANGED_MAJORS_OUTPUT" | tail -1)
+CHANGED_MINORS=$(go run main.go changed-minors --from="$FROM_REF" --to="$TO_REF")
 
-if [ "$CHANGED_MAJORS" = "[]" ]; then
+if [ "$CHANGED_MINORS" = "[]" ]; then
   echo "No changes detected in lock.yaml"
   exit 0
 fi
 
-echo "Changed majors: $CHANGED_MAJORS"
+echo "Changed Rancher minors: $CHANGED_MINORS"
 echo ""
 
-# Always fetch latest versions branch
-echo "Fetching latest versions branch..."
-git fetch origin versions:versions
-
-# Set up worktree for versions branch
-VERSIONS_DIR=$(mktemp -d)
-trap "rm -rf $VERSIONS_DIR" EXIT
-
-git worktree add "$VERSIONS_DIR" versions >/dev/null 2>&1
-
-# Plan releases
-echo "Planning pre-release version bumps..."
-RELEASE_PLAN_OUTPUT=$(go run main.go plan-release \
-  --versions-file="$VERSIONS_DIR/versions.yaml" \
+# Plan releases (CalVer - generates timestamps automatically)
+echo "Planning CalVer pre-release versions..."
+RELEASE_PLAN=$(go run main.go plan-release \
   --type=auto \
-  --changed-majors="$CHANGED_MAJORS" \
-  --verbose)
-RELEASE_PLAN=$(echo "$RELEASE_PLAN_OUTPUT" | tail -1)
-
-git worktree remove "$VERSIONS_DIR" >/dev/null 2>&1
+  --changed-minors="$CHANGED_MINORS")
 
 echo ""
 echo "Release Plan:"
@@ -89,74 +73,28 @@ COMMIT_SHA=$(git rev-parse "$TO_REF")
 echo ""
 echo "Creating tags..."
 echo "$RELEASE_PLAN" | jq -c '.[]' | while read -r release; do
-  MAJOR=$(echo "$release" | jq -r '.major')
-  VERSION=$(echo "$release" | jq -r '.new_version')
-  CURRENT_STABLE=$(echo "$release" | jq -r '.current_stable')
-  CURRENT_PRERELEASE=$(echo "$release" | jq -r '.current_prerelease')
+  MINOR=$(echo "$release" | jq -r '.rancher_minor')
+  VERSION=$(echo "$release" | jq -r '.version')
+  RTYPE=$(echo "$release" | jq -r '.release_type')
 
   echo ""
-  echo "Creating tag $VERSION for $MAJOR at $COMMIT_SHA"
+  echo "Creating tag $VERSION for Rancher $MINOR ($RTYPE) at $COMMIT_SHA"
 
-  .github/scripts/create-prerelease-tag.sh \
-    "$VERSION" \
-    "$COMMIT_SHA" \
-    "$MAJOR" \
-    "$CURRENT_STABLE" \
-    "$CURRENT_PRERELEASE"
+  # Create annotated tag
+  git tag -a "$VERSION" "$COMMIT_SHA" -m "Auto pre-release: $VERSION
 
+Rancher Minor: $MINOR
+Triggered by: commit $COMMIT_SHA
+Changed minors: $CHANGED_MINORS"
+
+  # Push tag
   git push origin "$VERSION"
   echo "✅ Pushed tag $VERSION"
 done
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Updating versions branch..."
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-# Update versions branch using worktree
-if ! git show-ref --verify --quiet refs/heads/versions; then
-  git fetch origin versions:versions
-fi
-
-VERSIONS_UPDATE_DIR=$(mktemp -d)
-trap "rm -rf $VERSIONS_UPDATE_DIR" EXIT
-
-git worktree add "$VERSIONS_UPDATE_DIR" versions >/dev/null 2>&1
-
-cd "$VERSIONS_UPDATE_DIR"
-
-TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-echo "$RELEASE_PLAN" | jq -c '.[]' | while read -r release; do
-  MAJOR=$(echo "$release" | jq -r '.major')
-  NEW_VERSION=$(echo "$release" | jq -r '.new_version')
-
-  echo "Updating $MAJOR prerelease to $NEW_VERSION"
-
-  yq eval ".${MAJOR}.prerelease.tag = \"${NEW_VERSION}\"" -i versions.yaml
-  yq eval ".${MAJOR}.prerelease.updated-at = \"${TIMESTAMP}\"" -i versions.yaml
-done
-
-git add versions.yaml
-
-if ! git diff --cached --quiet; then
-  git commit -m "Auto-update prerelease versions
-
-Triggered by: commit $COMMIT_SHA
-Changed majors: $CHANGED_MAJORS"
-
-  git push origin versions
-  echo "✅ Updated versions branch"
-else
-  echo "No changes to versions.yaml"
-fi
-
-cd "$REPO_ROOT"
-git worktree remove "$VERSIONS_UPDATE_DIR" >/dev/null 2>&1
-
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✅ All tags created and versions updated"
+echo "✅ All tags created successfully"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "Tags will trigger build workflow at:"
