@@ -27,19 +27,33 @@ type ScanResult struct {
 	InvalidImages []InvalidImageEntry
 }
 
+// CatalogResults maps catalog name to its scan results
+type CatalogResults map[string]*ScanResult
+
+type SkipChecker func(entry chart.IndexEntry) bool
+
+func skipOldCharts(_ chart.IndexEntry) bool {
+	return false
+}
+
 // ScanCharts scans all chart catalogs and extracts image references
-func ScanCharts(config ExportConfig) (*ScanResult, error) {
-	imagesSet := make(ImageSet)
-	invalidSet := make(InvalidImageSet)
+// Returns a map of catalog name -> ScanResult for separate tracking
+func ScanCharts(config ExportConfig) (CatalogResults, error) {
+	results := make(CatalogResults)
 
 	// Scan the three chart catalogs
 	catalogs := []struct {
-		name string
-		path string
+		name        string
+		path        string
+		skipChecker SkipChecker
 	}{
-		{"rancher-charts", filepath.Join(config.ChartsPath, "rancher-charts")},
-		{"rancher-partner-charts", filepath.Join(config.ChartsPath, "rancher-partner-charts")},
-		{"rancher-rke2-charts", filepath.Join(config.ChartsPath, "rancher-rke2-charts")},
+		{
+			"rancher-charts",
+			filepath.Join(config.ChartsPath, "rancher-charts"),
+			skipOldCharts,
+		},
+		{"rancher-partner-charts", filepath.Join(config.ChartsPath, "rancher-partner-charts"), nil},
+		{"rancher-rke2-charts", filepath.Join(config.ChartsPath, "rancher-rke2-charts"), nil},
 	}
 
 	for _, catalog := range catalogs {
@@ -51,18 +65,27 @@ func ScanCharts(config ExportConfig) (*ScanResult, error) {
 		}
 
 		fmt.Printf("  Scanning %s...\n", catalog.name)
-		if err := scanCatalog(catalogPath, catalog.name, imagesSet, invalidSet); err != nil {
+
+		// Create separate tracking sets for this catalog
+		imagesSet := make(ImageSet)
+		invalidSet := make(InvalidImageSet)
+		shouldSkipChart := func(entry chart.IndexEntry) bool { return false }
+		if catalog.skipChecker != nil {
+			shouldSkipChart = catalog.skipChecker
+		}
+
+		if err := scanCatalog(catalogPath, catalog.name, imagesSet, invalidSet, shouldSkipChart); err != nil {
 			return nil, fmt.Errorf("failed to scan %s: %w", catalog.name, err)
+		}
+
+		// Convert sets to sorted lists for this catalog
+		results[catalog.name] = &ScanResult{
+			ValidImages:   imagesToList(imagesSet),
+			InvalidImages: invalidImagesToList(invalidSet),
 		}
 	}
 
-	// Convert sets to sorted lists
-	result := &ScanResult{
-		ValidImages:   imagesToList(imagesSet),
-		InvalidImages: invalidImagesToList(invalidSet),
-	}
-
-	return result, nil
+	return results, nil
 }
 
 // findCatalogDir finds the catalog directory which might have a hash suffix
@@ -95,7 +118,7 @@ func findCatalogDir(basePath string) (string, error) {
 }
 
 // scanCatalog scans a single chart catalog
-func scanCatalog(catalogPath string, catalogName string, imagesSet ImageSet, invalidSet InvalidImageSet) error {
+func scanCatalog(catalogPath string, catalogName string, imagesSet ImageSet, invalidSet InvalidImageSet, shouldSkipChart SkipChecker) error {
 	indexPath := filepath.Join(catalogPath, "index.yaml")
 
 	// Load index.yaml
@@ -119,6 +142,12 @@ func scanCatalog(catalogPath string, catalogName string, imagesSet ImageSet, inv
 		// Use the first version (should be latest)
 		version := versions[0]
 		chartSource := fmt.Sprintf("%s:%s", version.Name, version.Version)
+
+		// Check if chart should be skipped
+		if shouldSkipChart(version) {
+			fmt.Printf("    Warning: skipping %s\n", chartSource)
+			continue
+		}
 
 		// Find and extract the chart archive
 		if len(version.URLs) == 0 {
@@ -322,4 +351,110 @@ func invalidImagesToList(invalidSet InvalidImageSet) []InvalidImageEntry {
 	})
 
 	return entries
+}
+
+// WriteImageLists generates one image list file per catalog
+func WriteImageLists(results CatalogResults, config ExportConfig) error {
+	// Ensure output directory exists
+	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
+		return err
+	}
+
+	fmt.Printf("\nGenerating image lists in %s/:\n", config.OutputDir)
+
+	// Process each catalog separately
+	for catalogName, result := range results {
+		refs := result.ValidImages
+
+		// Separate Linux and Windows images
+		var linuxImages, windowsImages []ImageReference
+		for _, ref := range refs {
+			if ref.OS == Windows {
+				windowsImages = append(windowsImages, ref)
+			} else {
+				linuxImages = append(linuxImages, ref)
+			}
+		}
+
+		// Generate main image list file (Linux images)
+		if len(linuxImages) > 0 {
+			imageListPath := filepath.Join(config.OutputDir, catalogName+"-images.txt")
+			var imageList []string
+			for _, img := range linuxImages {
+				imageList = append(imageList, img.Image)
+			}
+			if err := writeLines(imageListPath, imageList); err != nil {
+				return err
+			}
+			fmt.Printf("  - %s-images.txt (%d images)\n", catalogName, len(linuxImages))
+		}
+
+		// Generate Windows image list file if needed
+		if len(windowsImages) > 0 {
+			imageListPath := filepath.Join(config.OutputDir, catalogName+"-windows-images.txt")
+			var imageList []string
+			for _, img := range windowsImages {
+				imageList = append(imageList, img.Image)
+			}
+			if err := writeLines(imageListPath, imageList); err != nil {
+				return err
+			}
+			fmt.Printf("  - %s-windows-images.txt (%d images)\n", catalogName, len(windowsImages))
+		}
+
+		// Generate invalid images report if there are any
+		if len(result.InvalidImages) > 0 {
+			if err := writeInvalidImagesReport(catalogName, result.InvalidImages, config.OutputDir); err != nil {
+				return err
+			}
+			fmt.Printf("  - %s-invalid-images.txt (%d invalid entries) ⚠️\n", catalogName, len(result.InvalidImages))
+		}
+	}
+
+	return nil
+}
+
+// writeInvalidImagesReport writes a detailed report of invalid image references for a catalog
+func writeInvalidImagesReport(catalogName string, invalidImages []InvalidImageEntry, outputDir string) error {
+	path := filepath.Join(outputDir, catalogName+"-invalid-images.txt")
+
+	var lines []string
+
+	// Add header explaining the file
+	lines = append(lines, "# Invalid Image References Report")
+	lines = append(lines, "#")
+	lines = append(lines, "# This file contains image references that were found in chart values.yaml files")
+	lines = append(lines, "# but failed validation. These are typically placeholder values that need to be")
+	lines = append(lines, "# fixed in the source charts.")
+	lines = append(lines, "#")
+	lines = append(lines, "# Format:")
+	lines = append(lines, "# Image: <invalid-image-reference>")
+	lines = append(lines, "# Reason: <why-it-failed-validation>")
+	lines = append(lines, "# Catalog: <cluster-repo-catalog>")
+	lines = append(lines, "# Sources: <chart:version> [<chart:version> ...]")
+	lines = append(lines, "#")
+	lines = append(lines, "# Total invalid entries: "+fmt.Sprintf("%d", len(invalidImages)))
+	lines = append(lines, "")
+
+	// Add each invalid entry with full context
+	for i, entry := range invalidImages {
+		if i > 0 {
+			lines = append(lines, "") // Blank line between entries
+		}
+		lines = append(lines, fmt.Sprintf("Image: %s", entry.Image))
+		lines = append(lines, fmt.Sprintf("Reason: %s", entry.Reason))
+		lines = append(lines, fmt.Sprintf("Catalog: %s", entry.CatalogRef))
+		lines = append(lines, fmt.Sprintf("Sources: %s", strings.Join(entry.Sources, ", ")))
+	}
+
+	return writeLines(path, lines)
+}
+
+// writeLines writes a slice of strings to a file, one per line
+func writeLines(path string, lines []string) error {
+	content := strings.Join(lines, "\n")
+	if len(lines) > 0 {
+		content += "\n" // Ensure trailing newline
+	}
+	return os.WriteFile(path, []byte(content), 0644)
 }
