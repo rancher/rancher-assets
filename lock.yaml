@@ -6,30 +6,30 @@ chart-versions:
         upstream-refs:
             prod:
                 charts:
+                    fetched-at: 2026-07-16T16:48:01.374231Z
                     branch: release-v2.14
                     commit: 5781a718aa2c0f8535db2f45faafbd7692e17e80
-                    fetched-at: 2026-07-16T16:48:01.374231Z
                 partner:
+                    fetched-at: 2026-07-16T16:48:01.706798Z
                     branch: main
                     commit: 09064b05982bab905677c51539182c1a50727ac1
-                    fetched-at: 2026-07-16T16:48:01.706798Z
                 rke2:
+                    fetched-at: 2026-07-16T16:48:01.990126Z
                     branch: main
                     commit: 2f2d2a826d3ed3e41f085edf7a712d091c83a986
-                    fetched-at: 2026-07-16T16:48:01.990126Z
             dev:
                 charts:
+                    fetched-at: 2026-07-16T16:48:02.224613Z
                     branch: dev-v2.14
                     commit: 62b1e9880cb5bb3e20a8265053d8032c71a8d7e0
-                    fetched-at: 2026-07-16T16:48:02.224613Z
                 partner:
+                    fetched-at: 2026-07-16T16:48:02.464475Z
                     branch: main
                     commit: 09064b05982bab905677c51539182c1a50727ac1
-                    fetched-at: 2026-07-16T16:48:02.464475Z
                 rke2:
+                    fetched-at: 2026-07-16T16:48:02.700744Z
                     branch: main
                     commit: 2f2d2a826d3ed3e41f085edf7a712d091c83a986
-                    fetched-at: 2026-07-16T16:48:02.700744Z
     "2.15":
         latest-stable: null
         latest-prerelease: null
@@ -37,92 +37,33 @@ chart-versions:
         upstream-refs:
             prod:
                 charts:
+                    fetched-at: 2026-07-16T16:48:02.968784Z
                     branch: release-v2.15
                     commit: fb165b39851a2d4b66f579695372d8f69937179e
-                    fetched-at: 2026-07-16T16:48:02.968784Z
                 partner:
+                    fetched-at: 2026-07-16T16:48:03.234093Z
                     branch: main
                     commit: 09064b05982bab905677c51539182c1a50727ac1
-                    fetched-at: 2026-07-16T16:48:03.234093Z
                 rke2:
+                    fetched-at: 2026-07-16T16:48:03.517104Z
                     branch: main
                     commit: 2f2d2a826d3ed3e41f085edf7a712d091c83a986
-                    fetched-at: 2026-07-16T16:48:03.517104Z
             dev:
                 charts:
+                    fetched-at: 2026-07-16T16:48:03.770837Z
                     branch: dev-v2.15
                     commit: 2dd2f6774834fe2930d031b4f27ace1f6ae8eca5
-                    fetched-at: 2026-07-16T16:48:03.770837Z
                 partner:
+                    fetched-at: 2026-07-16T16:48:03.991467Z
                     branch: main
                     commit: 09064b05982bab905677c51539182c1a50727ac1
-                    fetched-at: 2026-07-16T16:48:03.991467Z
                 rke2:
+                    fetched-at: 2026-07-16T16:48:04.283253Z
                     branch: main
                     commit: 2f2d2a826d3ed3e41f085edf7a712d091c83a986
-                    fetched-at: 2026-07-16T16:48:04.283253Z
-    v0:
-        latest-stable: null
-        latest-prerelease: null
-        updated-at: null
-        upstream-refs:
-            prod:
-                charts:
-                    branch: release-v2.14
-                    commit: f408a794062923524cb3228911dfb8d507a82762
-                    fetched-at: 2026-06-05T19:47:08.231716Z
-                partner:
-                    branch: main
-                    commit: 13b90384066cc1bdfebb0d70592c921e427a211c
-                    fetched-at: 2026-06-05T19:47:08.515744Z
-                rke2:
-                    branch: main
-                    commit: d086587815d18f79d9079d622ee5b120f60d80e6
-                    fetched-at: 2026-06-05T19:47:08.670118Z
-            dev:
-                charts:
-                    branch: dev-v2.14
-                    commit: a7b9d818214a34d4e76f240aa180756dcee26697
-                    fetched-at: 2026-06-05T19:47:08.900515Z
-                partner:
-                    branch: main
-                    commit: 13b90384066cc1bdfebb0d70592c921e427a211c
-                    fetched-at: 2026-06-05T19:47:09.128737Z
-                rke2:
-                    branch: main
-                    commit: d086587815d18f79d9079d622ee5b120f60d80e6
-                    fetched-at: 2026-06-05T19:47:09.294473Z
-    v1:
-        latest-stable: null
-        latest-prerelease: null
-        updated-at: null
-        upstream-refs:
-            prod:
-                charts:
-                    branch: release-v2.15
-                    commit: 0cfad74195c427ec67b5df7990c37bad67c45dca
-                    fetched-at: 2026-06-05T19:47:09.552543Z
-                partner:
-                    branch: main
-                    commit: 13b90384066cc1bdfebb0d70592c921e427a211c
-                    fetched-at: 2026-06-05T19:47:09.799175Z
-                rke2:
-                    branch: main
-                    commit: d086587815d18f79d9079d622ee5b120f60d80e6
-                    fetched-at: 2026-06-05T19:47:09.970112Z
-            dev:
-                charts:
-                    branch: dev-v2.15
-                    commit: b7652dacbd69130b2e2bdd8ccc9c733b4fdeceda
-                    fetched-at: 2026-06-05T19:47:10.129193Z
-                partner:
-                    branch: main
-                    commit: 13b90384066cc1bdfebb0d70592c921e427a211c
-                    fetched-at: 2026-06-05T19:47:10.32911Z
-                rke2:
-                    branch: main
-                    commit: d086587815d18f79d9079d622ee5b120f60d80e6
-                    fetched-at: 2026-06-05T19:47:10.503328Z
 copy-script-hash: 9b9da8e26b3377be489743e5f7164394e3fb3c67ea134cb629ba1904f8cd8053
-generated-at: 2026-07-16T16:48:04.284796Z
+template-hashes:
+    prod-template: 2bc40dc78b1a45731e4cdf08aabf3fd7a6c49bd61b463c2d0f2bd31f57f8c632
+    dev-template: 882c42b20f8bc7c67f1b57fbf179ca955baa61aa8afde5cb551001551029fc8f
+generated-at: 2026-07-24T22:31:21.986728Z
 generator-version: v0.1.0

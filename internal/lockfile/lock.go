@@ -12,8 +12,15 @@ import (
 type Lock struct {
 	ChartVersions    map[string]ChartVersionLock `yaml:"chart-versions"`
 	CopyScriptHash   string                      `yaml:"copy-script-hash"`
+	TemplateHashes   TemplateHashes              `yaml:"template-hashes"`
 	GeneratedAt      *time.Time                  `yaml:"generated-at"`
 	GeneratorVersion string                      `yaml:"generator-version"`
+}
+
+// TemplateHashes tracks hashes of template files for reproducibility
+type TemplateHashes struct {
+	ProdTemplate string `yaml:"prod-template"`
+	DevTemplate  string `yaml:"dev-template"`
 }
 
 // ChartVersionLock tracks state for a single Rancher minor version

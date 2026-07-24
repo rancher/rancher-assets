@@ -13,10 +13,12 @@ import (
 )
 
 const (
-	configPath     = "config.yaml"
-	lockPath       = "lock.yaml"
-	dockerfilesDir = "dockerfiles"
-	copyScriptPath = "package/copy-charts.sh"
+	configPath       = "config.yaml"
+	lockPath         = "lock.yaml"
+	dockerfilesDir   = "dockerfiles"
+	copyScriptPath   = "package/copy-charts.sh"
+	prodTemplatePath = "internal/generator/tmpl/prod.tmpl"
+	devTemplatePath  = "internal/generator/tmpl/dev.tmpl"
 )
 
 func Generate(ctx context.Context, args []string) error {
@@ -48,16 +50,52 @@ func Generate(ctx context.Context, args []string) error {
 
 	logger.Info("Found %d Rancher minor versions: %v", len(majors), majors)
 
+	// Always compute file hashes for reproducibility (these are local files)
+	logger.Info("\nComputing file hashes for reproducibility...")
+	logger.StartProgress("  - copy-charts.sh: ")
+	scriptHash, err := lockfile.ComputeFileHash(copyScriptPath)
+	if err != nil {
+		logger.CompleteProgress("FAILED (%v)", err)
+		return fmt.Errorf("failed to compute copy script hash: %w", err)
+	}
+	logger.CompleteProgress("%s", scriptHash[:16]+"...")
+
+	// Compute template hashes
+	logger.StartProgress("  - prod.tmpl: ")
+	prodHash, err := lockfile.ComputeFileHash(prodTemplatePath)
+	if err != nil {
+		logger.CompleteProgress("FAILED (%v)", err)
+		return fmt.Errorf("failed to compute prod template hash: %w", err)
+	}
+	logger.CompleteProgress("%s", prodHash[:16]+"...")
+
+	logger.StartProgress("  - dev.tmpl: ")
+	devHash, err := lockfile.ComputeFileHash(devTemplatePath)
+	if err != nil {
+		logger.CompleteProgress("FAILED (%v)", err)
+		return fmt.Errorf("failed to compute dev template hash: %w", err)
+	}
+	logger.CompleteProgress("%s", devHash[:16]+"...")
+
+	// Track if lock file needs to be saved
+	lockChanged := false
+
+	// Check if file hashes changed
+	if lock.CopyScriptHash != scriptHash {
+		lock.CopyScriptHash = scriptHash
+		lockChanged = true
+	}
+	if lock.TemplateHashes.ProdTemplate != prodHash {
+		lock.TemplateHashes.ProdTemplate = prodHash
+		lockChanged = true
+	}
+	if lock.TemplateHashes.DevTemplate != devHash {
+		lock.TemplateHashes.DevTemplate = devHash
+		lockChanged = true
+	}
+
 	// Update lock file with upstream refs if --update flag is set
 	if *update {
-		// Compute copy script hash for reproducibility
-		logger.Info("\nComputing copy-charts.sh hash...")
-		scriptHash, err := lockfile.ComputeFileHash(copyScriptPath)
-		if err != nil {
-			return fmt.Errorf("failed to compute copy script hash: %w", err)
-		}
-		logger.Info("  Script hash: %s", scriptHash[:16]+"...")
-		lock.CopyScriptHash = scriptHash
 
 		// Query upstream for each Rancher minor
 		for _, major := range majors {
@@ -136,14 +174,19 @@ func Generate(ctx context.Context, args []string) error {
 				return fmt.Errorf("failed to update lock file: %w", err)
 			}
 		}
+		lockChanged = true
+	} else {
+		logger.Info("\nUsing existing upstream refs (use --update to query remote repos)")
+	}
 
-		// Save lock file
+	// Save lock file only if something changed
+	if lockChanged {
 		logger.Info("\nSaving lock file...")
 		if err := lock.Save(lockPath); err != nil {
 			return fmt.Errorf("failed to save lock file: %w", err)
 		}
 	} else {
-		logger.Info("\nUsing existing lock file (use --update to query upstream repos)")
+		logger.Info("\nNo changes to lock file")
 	}
 
 	// Generate Dockerfiles for each Rancher minor
@@ -159,9 +202,10 @@ func Generate(ctx context.Context, args []string) error {
 	logger.Info("\nGenerated files:")
 	for _, major := range majors {
 		logger.Info("  - dockerfiles/Dockerfile.%s", major)
+		logger.Info("  - dockerfiles/Dockerfile.%s-dev", major)
 	}
-	if *update {
-		logger.Info("  - %s", lockPath)
+	if lockChanged {
+		logger.Info("  - %s (updated)", lockPath)
 		logger.Info("\nReview changes with: git diff dockerfiles/ lock.yaml")
 	} else {
 		logger.Info("\nReview changes with: git diff dockerfiles/")
