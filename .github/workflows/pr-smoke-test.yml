@@ -9,8 +9,9 @@ on:
       - 'dockerfiles/**'
       - 'lock.yaml'
       - 'config.yaml'
+      - 'Makefile'
+      - 'hack/make/**'
       - '.github/workflows/pr-smoke-test.yml'
-      - '.github/scripts/build-image.sh'
       - '.github/scripts/detect-changed-dockerfiles.sh'
 
 permissions:
@@ -93,18 +94,15 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Build image (smoke test)
-        run: |
-          # Build but don't push (uses --load to store locally)
-          ./.github/scripts/build-image.sh \
-            "${{ matrix.dockerfile }}" \
-            "${{ steps.tag.outputs.tag }}"
+        run: make build-image
         env:
-          TARGET_PLATFORMS: linux/amd64  # Single platform for smoke test (--load doesn't support multi-arch)
+          TAG: ${{ steps.tag.outputs.tag }}
           RANCHER_MINOR: ${{ steps.parse.outputs.rancher_minor }}
+          DEV: ${{ steps.parse.outputs.build_type == 'dev' }}
+          TARGET_PLATFORMS: linux/amd64  # Single platform for smoke test (--load doesn't support multi-arch)
           GIT_COMMIT: ${{ github.sha }}
           BUILD_DATE: ${{ github.event.pull_request.updated_at }}
           BUILD_URL: ${{ github.server_url }}/${{ github.repository }}/pull/${{ github.event.pull_request.number }}
-          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
 
       - name: Report success
         run: |
