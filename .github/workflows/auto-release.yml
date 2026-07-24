@@ -1,0 +1,151 @@
+name: Auto Release
+
+# Tier 1 Workflow: Detects changed Dockerfiles and creates CalVer tags
+# This triggers Tier 2 (release.yml) which builds the Docker images
+#
+# Key changes from auto-prerelease.yml:
+# - Dockerfile-centric detection (not lock.yaml-centric)
+# - Creates tags for BOTH prod and dev variants
+# - Uses POSIX scripts (not Go tooling)
+# - Pushes all tags atomically for concurrent releases
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'dockerfiles/**'
+
+permissions:
+  contents: write  # Needed to create and push tags
+
+jobs:
+  detect-and-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to detect changes
+
+      - name: Detect changed Dockerfiles
+        id: detect
+        run: |
+          echo "Detecting changed Dockerfiles between ${{ github.event.before }} and ${{ github.sha }}..."
+
+          CHANGED=$(./.github/scripts/detect-changed-dockerfiles.sh \
+            ${{ github.event.before }} \
+            ${{ github.sha }})
+
+          if [ -z "$CHANGED" ]; then
+            echo "No Dockerfiles changed"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Changed Dockerfiles:"
+          echo "$CHANGED"
+          echo ""
+
+          # Save for next step
+          echo "dockerfiles<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+
+      - name: Exit if no changes
+        if: steps.detect.outputs.has_changes == 'false'
+        run: |
+          echo "No Dockerfiles changed - skipping tag creation"
+          exit 0
+
+      - name: Create tags for each Dockerfile
+        if: steps.detect.outputs.has_changes == 'true'
+        id: create_tags
+        run: |
+          COMMIT_SHA="${{ github.sha }}"
+          TAGS=()
+
+          echo "Creating CalVer tags for changed Dockerfiles..."
+          echo ""
+
+          # Process each changed Dockerfile
+          echo "${{ steps.detect.outputs.dockerfiles }}" | while IFS= read -r dockerfile; do
+            if [ -z "$dockerfile" ]; then
+              continue
+            fi
+
+            echo "Processing: $dockerfile"
+
+            # Parse Dockerfile name
+            eval $(./.github/scripts/parse-dockerfile-name.sh "$dockerfile")
+            echo "  Rancher Minor: $RANCHER_MINOR"
+            echo "  Build Type: $BUILD_TYPE"
+
+            # Generate CalVer tag
+            TAG=$(./.github/scripts/generate-calver-tag.sh \
+              "$RANCHER_MINOR" \
+              "$BUILD_TYPE" \
+              "$COMMIT_SHA")
+            echo "  Tag: $TAG"
+
+            # Create annotated tag
+            ./.github/scripts/create-tag.sh "$TAG" "$COMMIT_SHA" "$dockerfile"
+
+            # Collect tag for batch push
+            TAGS+=("$TAG")
+            echo ""
+          done
+
+          # Save tags for summary
+          echo "tags<<EOF" >> $GITHUB_OUTPUT
+          printf '%s\n' "${TAGS[@]}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Push all tags atomically
+        if: steps.detect.outputs.has_changes == 'true'
+        run: |
+          # Push all tags in one operation to trigger concurrent release workflows
+          echo "Pushing all tags to origin..."
+
+          # Get all tags created in this run
+          TAGS=$(git tag --points-at ${{ github.sha }})
+
+          if [ -z "$TAGS" ]; then
+            echo "No tags to push"
+            exit 0
+          fi
+
+          echo "Tags to push:"
+          echo "$TAGS"
+          echo ""
+
+          # Push all tags
+          echo "$TAGS" | xargs git push origin
+
+          echo ""
+          echo "✅ All tags pushed successfully"
+
+      - name: Summary
+        if: steps.detect.outputs.has_changes == 'true'
+        run: |
+          echo "## Auto Release Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Created and pushed CalVer tags for changed Dockerfiles:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # List all tags created
+          git tag --points-at ${{ github.sha }} | while read tag; do
+            echo "- \`$tag\`" >> $GITHUB_STEP_SUMMARY
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "These tags will trigger the [release workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/release.yml) to build Docker images." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Changed Dockerfiles" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.detect.outputs.dockerfiles }}" | while read dockerfile; do
+            if [ -n "$dockerfile" ]; then
+              echo "- \`$dockerfile\`" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

@@ -1,0 +1,127 @@
+name: Manual Release
+
+# Tier 1 Workflow: Manually trigger CalVer tag creation
+# This workflow triggers Tier 2 (release.yml) which builds the Docker images
+#
+# Use cases:
+# - Release specific Rancher minor(s) on demand
+# - Create stable or prerelease tags explicitly
+# - Release from a specific commit SHA
+# - Release ALL minors at once
+
+on:
+  workflow_dispatch:
+    inputs:
+      rancher_minor:
+        description: 'Rancher minor version (e.g., 2.15) or empty for ALL active minors'
+        required: false
+        type: string
+      build_type:
+        description: 'Build type'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: 'dev'
+      commit_sha:
+        description: 'Commit SHA to tag (leave empty for HEAD)'
+        required: false
+        type: string
+
+permissions:
+  contents: write  # Needed to create and push tags
+
+jobs:
+  create-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history
+          ref: ${{ inputs.commit_sha || github.sha }}
+
+      - name: Determine Rancher minors to release
+        id: minors
+        run: |
+          if [ -n "${{ inputs.rancher_minor }}" ]; then
+            # Single minor specified
+            MINORS="${{ inputs.rancher_minor }}"
+            echo "Releasing only: ${{ inputs.rancher_minor }}"
+          else
+            # Release all active minors from config.yaml
+            MINORS=$(yq eval '.chart-versions | keys | .[]' config.yaml | tr '\n' ' ')
+            echo "Releasing ALL active minors: $MINORS"
+          fi
+
+          echo "minors=$MINORS" >> $GITHUB_OUTPUT
+
+      - name: Create tags
+        id: create
+        run: |
+          COMMIT_SHA=$(git rev-parse HEAD)
+          BUILD_TYPE="${{ inputs.build_type }}"
+
+          echo "Creating CalVer $BUILD_TYPE tags at commit $COMMIT_SHA"
+          echo ""
+
+          for MINOR in ${{ steps.minors.outputs.minors }}; do
+            echo "Processing Rancher $MINOR ($BUILD_TYPE)..."
+
+            # Generate CalVer tag
+            TAG=$(./.github/scripts/generate-calver-tag.sh \
+              "$MINOR" \
+              "$BUILD_TYPE" \
+              "$COMMIT_SHA")
+
+            echo "  Tag: $TAG"
+
+            # Determine Dockerfile for tag message
+            DOCKERFILE="dockerfiles/Dockerfile.${MINOR}"
+            if [ "$BUILD_TYPE" = "dev" ]; then
+              DOCKERFILE="${DOCKERFILE}-dev"
+            fi
+
+            # Create annotated tag with message
+            ./.github/scripts/create-tag.sh "$TAG" "$COMMIT_SHA" "$DOCKERFILE"
+
+            echo "  ✅ Created tag $TAG"
+            echo ""
+          done
+
+      - name: Push all tags
+        run: |
+          echo "Pushing all tags to origin..."
+          echo ""
+
+          # Get tags created at this commit
+          TAGS=$(git tag --points-at HEAD)
+
+          echo "Tags to push:"
+          echo "$TAGS"
+          echo ""
+
+          # Push all tags
+          echo "$TAGS" | xargs git push origin
+
+          echo ""
+          echo "✅ All tags pushed successfully"
+
+      - name: Summary
+        run: |
+          echo "## Manual Release Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Type:** ${{ inputs.build_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit SHA:** $(git rev-parse HEAD)" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Created tags:**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          git tag --points-at HEAD | while read tag; do
+            echo "- \`$tag\`" >> $GITHUB_STEP_SUMMARY
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "These tags will trigger the release workflow to build Docker images." >> $GITHUB_STEP_SUMMARY

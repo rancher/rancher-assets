@@ -1,0 +1,245 @@
+name: Build and Release
+
+# Tier 2 Workflow: Triggered by CalVer tags to build and push Docker images
+# Tier 1 workflows (auto-prerelease.yml or manual scripts) create the tags
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  REPO: rancher-assets
+
+jobs:
+  parse-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      rancher_minor: ${{ steps.parse.outputs.rancher_minor }}
+      build_type: ${{ steps.parse.outputs.build_type }}
+      release_id: ${{ steps.create_release.outputs.id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Parse CalVer tag
+        id: parse
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "Parsing tag: $VERSION"
+
+          # CalVer format: v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]
+          # Examples:
+          #   v2.15-20260716T1430Z-dev  (prerelease/dev build)
+          #   v2.14-20260805T1600Z      (stable/prod build)
+
+          if [[ "$VERSION" =~ ^v([0-9]+\.[0-9]+)-[0-9]{8}T[0-9]{4}Z-dev$ ]]; then
+            # Dev build (has -dev suffix)
+            RANCHER_MINOR="${BASH_REMATCH[1]}"
+            BUILD_TYPE=dev
+            PRERELEASE=true
+            echo "✅ CalVer prerelease detected - DEV build"
+            echo "   Rancher Minor: $RANCHER_MINOR"
+          elif [[ "$VERSION" =~ ^v([0-9]+\.[0-9]+)-[0-9]{8}T[0-9]{4}Z$ ]]; then
+            # Prod build (no -dev suffix)
+            RANCHER_MINOR="${BASH_REMATCH[1]}"
+            BUILD_TYPE=prod
+            PRERELEASE=false
+            echo "✅ CalVer stable detected - PROD build"
+            echo "   Rancher Minor: $RANCHER_MINOR"
+          else
+            echo "❌ ERROR: Invalid CalVer tag format: $VERSION"
+            echo "Expected: v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "rancher_minor=$RANCHER_MINOR" >> $GITHUB_OUTPUT
+          echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
+          echo "prerelease=$PRERELEASE" >> $GITHUB_OUTPUT
+
+      - name: Get tag message
+        id: tag_message
+        run: |
+          VERSION=${{ steps.parse.outputs.version }}
+          TAG_MESSAGE=$(git tag -l --format='%(contents)' "$VERSION")
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Generate draft release body
+        id: draft_body
+        run: |
+          BODY=$(.github/scripts/generate-release-notes.sh \
+            "${{ steps.parse.outputs.version }}" \
+            "${{ steps.parse.outputs.rancher_minor }}" \
+            "${{ steps.parse.outputs.build_type }}" \
+            --draft \
+            --tag-message "${{ steps.tag_message.outputs.message }}")
+
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create draft release
+        id: create_release
+        uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # v1.1.4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.parse.outputs.version }}
+          release_name: Rancher Assets ${{ steps.parse.outputs.version }}
+          draft: true
+          prerelease: ${{ steps.parse.outputs.prerelease }}
+          body: ${{ steps.draft_body.outputs.body }}
+
+  build-and-push:
+    needs: parse-tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine Dockerfile path
+        id: dockerfile
+        run: |
+          DOCKERFILE="dockerfiles/Dockerfile.${{ needs.parse-tag.outputs.rancher_minor }}"
+          if [ "${{ needs.parse-tag.outputs.build_type }}" = "dev" ]; then
+            DOCKERFILE="${DOCKERFILE}-dev"
+          fi
+          echo "path=$DOCKERFILE" >> $GITHUB_OUTPUT
+          echo "Building from: $DOCKERFILE"
+
+      - name: Build and push to GHCR
+        run: |
+          ./.github/scripts/build-image.sh \
+            "${{ steps.dockerfile.outputs.path }}" \
+            "${{ needs.parse-tag.outputs.version }}" \
+            --push
+        env:
+          RANCHER_MINOR: ${{ needs.parse-tag.outputs.rancher_minor }}
+          GIT_COMMIT: ${{ github.sha }}
+          BUILD_DATE: ${{ github.event.head_commit.timestamp }}
+          BUILD_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          TARGET_PLATFORMS: linux/amd64,linux/arm64
+          REGISTRY: ${{ env.REGISTRY }}
+
+  export-image-lists:
+    needs: [parse-tag, build-and-push]
+    if: success()
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/go1.26:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image lists
+        run: |
+          ./scripts/export-image-lists.sh \
+            --image "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${{ needs.parse-tag.outputs.version }}" \
+            --version "${{ needs.parse-tag.outputs.version }}" \
+            --output-dir "dist/${{ needs.parse-tag.outputs.version }}"
+
+      - name: Upload image lists as release assets
+        run: |
+          VERSION="${{ needs.parse-tag.outputs.version }}"
+          gh release upload "$VERSION" dist/$VERSION/* --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-release:
+    needs: [parse-tag, build-and-push, export-image-lists]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Get tag message
+        id: tag_message
+        run: |
+          VERSION=${{ needs.parse-tag.outputs.version }}
+          TAG_MESSAGE=$(git tag -l --format='%(contents)' "$VERSION")
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Generate final release body
+        run: |
+          .github/scripts/generate-release-notes.sh \
+            "${{ needs.parse-tag.outputs.version }}" \
+            "${{ needs.parse-tag.outputs.rancher_minor }}" \
+            "${{ needs.parse-tag.outputs.build_type }}" \
+            --tag-message "${{ steps.tag_message.outputs.message }}" \
+            > /tmp/release-notes.md
+
+      - name: Publish release (undraft)
+        run: |
+          VERSION="${{ needs.parse-tag.outputs.version }}"
+          gh release edit "$VERSION" \
+            --draft=false \
+            --notes-file /tmp/release-notes.md
+          echo "Release $VERSION published successfully!"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  create-rancher-pr:
+    needs: [parse-tag, publish-release]
+    if: success() && needs.parse-tag.outputs.build_type == 'prod'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Get Rancher target branch
+        id: rancher
+        run: |
+          RANCHER_MINOR=${{ needs.parse-tag.outputs.rancher_minor }}
+          RANCHER_BRANCH=$(yq eval ".chart-versions.\"${RANCHER_MINOR}\".rancher-branch" config.yaml)
+          echo "branch=$RANCHER_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Create PR to rancher/rancher
+        run: |
+          VERSION="${{ needs.parse-tag.outputs.version }}"
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${VERSION}"
+
+          PR_BODY=$(.github/scripts/generate-rancher-pr-body.sh \
+            "$VERSION" \
+            "${{ needs.parse-tag.outputs.rancher_minor }}" \
+            "$IMAGE")
+
+          gh pr create --repo rancher/rancher \
+            --base ${{ steps.rancher.outputs.branch }} \
+            --title "Update to rancher-assets ${VERSION}" \
+            --body "$PR_BODY"
+        env:
+          GH_TOKEN: ${{ secrets.RANCHER_REPO_TOKEN }}

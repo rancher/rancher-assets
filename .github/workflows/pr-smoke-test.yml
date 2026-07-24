@@ -1,0 +1,133 @@
+name: PR Smoke Test
+
+# Smoke test workflow that verifies modified Dockerfiles can build successfully.
+# Runs on pull requests to catch build failures before merge.
+
+on:
+  pull_request:
+    paths:
+      - 'dockerfiles/**'
+      - 'lock.yaml'
+      - 'config.yaml'
+      - '.github/workflows/pr-smoke-test.yml'
+      - '.github/scripts/build-image.sh'
+      - '.github/scripts/detect-changed-dockerfiles.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      dockerfiles: ${{ steps.detect.outputs.dockerfiles }}
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need history to detect changes
+
+      - name: Detect changed Dockerfiles
+        id: detect
+        run: |
+          echo "Detecting changed Dockerfiles between base and HEAD..."
+          CHANGED=$(./.github/scripts/detect-changed-dockerfiles.sh \
+            origin/${{ github.base_ref }} \
+            ${{ github.sha }})
+
+          echo "Changed Dockerfiles:"
+          echo "$CHANGED"
+
+          # Save for next job (one per line)
+          echo "dockerfiles<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Set matrix
+        id: set-matrix
+        run: |
+          # Convert newline-separated list to JSON array for matrix
+          DOCKERFILES=$(echo "${{ steps.detect.outputs.dockerfiles }}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "matrix={\"dockerfile\":${DOCKERFILES}}" >> $GITHUB_OUTPUT
+
+      - name: Check if any Dockerfiles changed
+        id: check
+        run: |
+          if [ -z "${{ steps.detect.outputs.dockerfiles }}" ]; then
+            echo "No Dockerfiles changed - skipping build tests"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+  smoke-test:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.matrix != '{"dockerfile":[]}'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false  # Test all Dockerfiles even if one fails
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Parse Dockerfile name
+        id: parse
+        run: |
+          eval $(./.github/scripts/parse-dockerfile-name.sh "${{ matrix.dockerfile }}")
+          echo "rancher_minor=$RANCHER_MINOR" >> $GITHUB_OUTPUT
+          echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
+
+      - name: Generate test tag
+        id: tag
+        run: |
+          TAG=$(./.github/scripts/generate-calver-tag.sh \
+            "${{ steps.parse.outputs.rancher_minor }}" \
+            "${{ steps.parse.outputs.build_type }}" \
+            "${{ github.sha }}")
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Build image (smoke test)
+        run: |
+          # Build but don't push (uses --load to store locally)
+          ./.github/scripts/build-image.sh \
+            "${{ matrix.dockerfile }}" \
+            "${{ steps.tag.outputs.tag }}"
+        env:
+          TARGET_PLATFORMS: linux/amd64  # Single platform for smoke test (--load doesn't support multi-arch)
+          RANCHER_MINOR: ${{ steps.parse.outputs.rancher_minor }}
+          GIT_COMMIT: ${{ github.sha }}
+          BUILD_DATE: ${{ github.event.pull_request.updated_at }}
+          BUILD_URL: ${{ github.server_url }}/${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+
+      - name: Report success
+        run: |
+          echo "✅ Successfully built ${{ matrix.dockerfile }}" >> $GITHUB_STEP_SUMMARY
+          echo "   Tag: ${{ steps.tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "   Rancher Minor: ${{ steps.parse.outputs.rancher_minor }}" >> $GITHUB_STEP_SUMMARY
+          echo "   Build Type: ${{ steps.parse.outputs.build_type }}" >> $GITHUB_STEP_SUMMARY
+
+  summary:
+    needs: [detect-changes, smoke-test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check smoke test results
+        run: |
+          echo "## PR Smoke Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.smoke-test.result }}" = "success" ]; then
+            echo "✅ All Dockerfile builds passed" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.smoke-test.result }}" = "skipped" ]; then
+            echo "⏭️ No Dockerfiles changed - smoke tests skipped" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some Dockerfile builds failed" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
