@@ -40,14 +40,6 @@ type ClusterRepoConfig struct {
 	Path string `yaml:"path"`
 }
 
-// BuildType represents prod or dev builds
-type BuildType string
-
-const (
-	buildTypeProd BuildType = "prod"
-	buildTypeDev  BuildType = "dev"
-)
-
 // Load reads and parses the config.yaml file
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -132,23 +124,6 @@ func validateBuildConfig(major, buildType string, cfg BuildConfig) error {
 		return fmt.Errorf("chart version %s: %s.rke2-branch is required", major, buildType)
 	}
 	return nil
-}
-
-// GetBuildConfig returns the build configuration for a specific Rancher minor and build type
-func (c *Config) GetBuildConfig(major string, buildType BuildType) (*BuildConfig, error) {
-	chartCfg, exists := c.ChartVersions[major]
-	if !exists {
-		return nil, errors.New("rancher minor " + major + " not found in config")
-	}
-
-	switch buildType {
-	case buildTypeProd:
-		return &chartCfg.Prod, nil
-	case buildTypeDev:
-		return &chartCfg.Dev, nil
-	default:
-		return nil, errors.New("invalid build type: " + string(buildType))
-	}
 }
 
 // GetChartVersion returns the chart version config for a specific Rancher minor

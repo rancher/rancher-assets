@@ -14,7 +14,7 @@ SOURCE_REPO ?= rancher/rancher-assets
 IMAGE_REPO ?= $(REGISTRY)/$(ORG)/$(REPO)
 TARGET_PLATFORMS ?= linux/amd64,linux/arm64
 
-.PHONY: help generate verify export-images build build-all build-release build-release-with-lists push-image push-all vendor-update release-auto release-manual
+.PHONY: help generate verify export-images export-images-debug build build-all build-release build-release-with-lists push-image push-all vendor-update release-auto release-manual
 
 help: ## Show this help message
 	@echo "Rancher Assets Build System"
@@ -31,6 +31,7 @@ help: ## Show this help message
 	@echo "  make build-release                # Local debug - builds latest-stable from lock.yaml"
 	@echo "  make build-release-with-lists     # Local debug - builds + generates image lists"
 	@echo "  make export-images RANCHER_MINOR=v1 VERSION=v1.0.0  # Generate image lists"
+	@echo "  make export-images-debug CHARTS_PATH=/tmp/charts/v2  # Debug image list code"
 	@echo "  make release-auto                 # Create auto pre-release tags"
 	@echo "  make release-manual BUMP=minor RELEASE=prerelease"
 	@echo ""
@@ -69,6 +70,37 @@ export-images: ## Generate image lists from chart catalogs (requires RANCHER_MIN
 		--version "$(VERSION)" \
 		--output-dir "dist/$(VERSION)" \
 		$$LOCAL_FLAG
+
+export-images-debug: ## Debug: Generate image lists from local chart catalogs (requires CHARTS_PATH)
+	@if [ -z "$(CHARTS_PATH)" ]; then \
+		echo "❌ Error: CHARTS_PATH required"; \
+		echo ""; \
+		echo "Usage:"; \
+		echo "  make export-images-debug CHARTS_PATH=/tmp/rancher-assets-charts-v1.0.0/v2"; \
+		echo ""; \
+		echo "This target is for debugging the image list generation code."; \
+		echo "Point CHARTS_PATH to a directory containing the extracted chart catalogs"; \
+		echo "(rancher-charts, rancher-partner-charts, rancher-rke2-charts)."; \
+		echo ""; \
+		echo "To extract catalogs from an existing image:"; \
+		echo "  1. docker create --name tmp-extract IMAGE_NAME"; \
+		echo "  2. docker cp tmp-extract:/var/lib/rancher-data/local-catalogs/v2 /tmp/charts"; \
+		echo "  3. docker rm tmp-extract"; \
+		echo "  4. cd /tmp/charts/v2 && for dir in */; do (cd \"\$$dir\" && git config --local core.bare false && git checkout -- .); done"; \
+		echo "  5. make export-images-debug CHARTS_PATH=/tmp/charts/v2"; \
+		exit 1; \
+	fi
+	@VERSION=$${VERSION:-debug}; \
+	OUTPUT_DIR=$${OUTPUT_DIR:-dist/debug}; \
+	echo "Scanning charts for image references..."; \
+	echo "  Charts path: $(CHARTS_PATH)"; \
+	echo "  Output dir: $$OUTPUT_DIR"; \
+	echo "  Version: $$VERSION"; \
+	echo ""; \
+	go run main.go export-images \
+		--charts-path "$(CHARTS_PATH)" \
+		--version "$$VERSION" \
+		--output-dir "$$OUTPUT_DIR"
 
 vendor-update: ## Update Go dependencies and vendor them
 	@./scripts/vendor-update.sh
@@ -116,17 +148,24 @@ push-image: ## Push image (for use with ecm-distro-tools)
 		echo "❌ Error: RANCHER_MINOR and VERSION required"; \
 		exit 1; \
 	fi
-	@eval $$(./scripts/get-build-vars.sh --major $(RANCHER_MINOR) --version $(VERSION) --format shell); \
+	@# Select Dockerfile based on VERSION suffix (-dev or not)
+	@DOCKERFILE=$$(if echo "$(VERSION)" | grep -q -- "-dev$$"; then \
+		echo "$(DOCKERFILES_DIR)/Dockerfile.$(RANCHER_MINOR)-dev"; \
+	else \
+		echo "$(DOCKERFILES_DIR)/Dockerfile.$(RANCHER_MINOR)"; \
+	fi); \
+	if [ ! -f "$$DOCKERFILE" ]; then \
+		echo "❌ Error: Dockerfile not found: $$DOCKERFILE"; \
+		echo "Run 'make generate' first"; \
+		exit 1; \
+	fi; \
+	eval $$(./scripts/get-build-vars.sh --minor $(RANCHER_MINOR) --version $(VERSION) --format shell); \
+	BUILD_TYPE=$$(if echo "$(VERSION)" | grep -q -- "-dev$$"; then echo "dev"; else echo "prod"; fi); \
+	echo "Pushing Rancher $(RANCHER_MINOR) version $(VERSION) ($$BUILD_TYPE)"; \
+	echo "  Dockerfile: $$DOCKERFILE"; \
 	docker buildx build \
-		--file "$(DOCKERFILES_DIR)/Dockerfile.$(RANCHER_MINOR)" \
+		--file "$$DOCKERFILE" \
 		--platform "$(TARGET_PLATFORMS)" \
-		--build-arg BUILD_TYPE=$$BUILD_TYPE \
-		--build-arg CHART_BRANCH=$$CHART_BRANCH \
-		--build-arg PARTNER_BRANCH=$$PARTNER_BRANCH \
-		--build-arg RKE2_BRANCH=$$RKE2_BRANCH \
-		--build-arg CHART_COMMIT=$$CHART_COMMIT \
-		--build-arg PARTNER_COMMIT=$$PARTNER_COMMIT \
-		--build-arg RKE2_COMMIT=$$RKE2_COMMIT \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_DATE=$(BUILD_DATE) \
@@ -192,23 +231,10 @@ push-all: ## Build and push all chart versions to registry
 		echo ""; \
 		\
 		RANCHER_BRANCH=$$(yq eval ".chart-versions.\"$$major\".rancher-branch" config.yaml 2>/dev/null); \
-		CHART_BRANCH=$$(yq eval ".chart-versions.\"$$major\".upstream-refs.dev.charts.branch" lock.yaml 2>/dev/null); \
-		PARTNER_BRANCH=$$(yq eval ".chart-versions.\"$$major\".upstream-refs.dev.partner.branch" lock.yaml 2>/dev/null); \
-		RKE2_BRANCH=$$(yq eval ".chart-versions.\"$$major\".upstream-refs.dev.rke2.branch" lock.yaml 2>/dev/null); \
-		CHART_COMMIT=$$(yq eval ".chart-versions.\"$$major\".upstream-refs.dev.charts.commit" lock.yaml 2>/dev/null); \
-		PARTNER_COMMIT=$$(yq eval ".chart-versions.\"$$major\".upstream-refs.dev.partner.commit" lock.yaml 2>/dev/null); \
-		RKE2_COMMIT=$$(yq eval ".chart-versions.\"$$major\".upstream-refs.dev.rke2.commit" lock.yaml 2>/dev/null); \
 		\
 		docker buildx build \
-			--file "$(DOCKERFILES_DIR)/Dockerfile.$$major" \
+			--file "$(DOCKERFILES_DIR)/Dockerfile.$$major-dev" \
 			--platform "$(TARGET_PLATFORMS)" \
-			--build-arg BUILD_TYPE=dev \
-			--build-arg CHART_BRANCH=$$CHART_BRANCH \
-			--build-arg PARTNER_BRANCH=$$PARTNER_BRANCH \
-			--build-arg RKE2_BRANCH=$$RKE2_BRANCH \
-			--build-arg CHART_COMMIT=$$CHART_COMMIT \
-			--build-arg PARTNER_COMMIT=$$PARTNER_COMMIT \
-			--build-arg RKE2_COMMIT=$$RKE2_COMMIT \
 			--build-arg VERSION=$$VERSION \
 			--build-arg GIT_COMMIT=$$(git rev-parse HEAD) \
 			--build-arg BUILD_DATE=$$(date -u +%Y-%m-%dT%H:%M:%SZ) \
@@ -241,18 +267,18 @@ test: ## Run tests
 release-auto: ## Create auto pre-release tags based on lock.yaml changes
 	@./scripts/create-auto-prerelease.sh
 
-release-manual: ## Create manual release tags (usage: make release-manual BUMP=minor RELEASE=prerelease [MAJOR=v0])
-	@if [ -z "$(BUMP)" ] || [ -z "$(RELEASE)" ]; then \
-		echo "❌ Error: BUMP and RELEASE required"; \
+release-manual: ## Create manual release tags (usage: make release-manual RELEASE=prerelease [MINOR=2.15])
+	@if [ -z "$(RELEASE)" ]; then \
+		echo "❌ Error: RELEASE required"; \
 		echo ""; \
 		echo "Usage:"; \
-		echo "  make release-manual BUMP=minor RELEASE=prerelease"; \
-		echo "  make release-manual BUMP=patch RELEASE=stable MAJOR=v0"; \
+		echo "  make release-manual RELEASE=prerelease         # All minors"; \
+		echo "  make release-manual RELEASE=stable MINOR=2.15  # Specific minor"; \
 		exit 1; \
 	fi
-	@ARGS="--bump=$(BUMP) --release=$(RELEASE)"; \
-	if [ -n "$(MAJOR)" ]; then \
-		ARGS="$$ARGS --major=$(MAJOR)"; \
+	@ARGS="--release=$(RELEASE)"; \
+	if [ -n "$(MINOR)" ]; then \
+		ARGS="$$ARGS --minor=$(MINOR)"; \
 	fi; \
 	if [ -n "$(COMMIT)" ]; then \
 		ARGS="$$ARGS --commit=$(COMMIT)"; \
