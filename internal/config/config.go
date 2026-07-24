@@ -1,10 +1,51 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"gopkg.in/yaml.v3"
+)
+
+// Config represents the complete configuration from config.yaml
+type Config struct {
+	ChartVersions map[string]ChartVersionConfig `yaml:"chart-versions"`
+	ClusterRepos  map[string]ClusterRepoConfig  `yaml:"cluster-repos"`
+	BaseImage     BaseImageConfig               `yaml:"base-image"`
+}
+
+// ChartVersionConfig defines a Rancher minor version configuration (e.g., 2.14, 2.15)
+type ChartVersionConfig struct {
+	RancherBranch string      `yaml:"rancher-branch"`
+	Prod          BuildConfig `yaml:"prod"`
+	Dev           BuildConfig `yaml:"dev"`
+}
+
+// BuildConfig defines upstream branch configuration for a build type
+type BuildConfig struct {
+	ChartsBranch  string `yaml:"charts-branch"`
+	PartnerBranch string `yaml:"partner-branch"`
+	Rke2Branch    string `yaml:"rke2-branch"`
+}
+
+// BaseImageConfig defines base image versions
+type BaseImageConfig struct {
+	BciVersion string `yaml:"bci-version"`
+}
+
+// ClusterRepoConfig defines an upstream repository with its URL and catalog path
+type ClusterRepoConfig struct {
+	URL  string `yaml:"url"`
+	Path string `yaml:"path"`
+}
+
+// BuildType represents prod or dev builds
+type BuildType string
+
+const (
+	buildTypeProd BuildType = "prod"
+	buildTypeDev  BuildType = "dev"
 )
 
 // Load reads and parses the config.yaml file
@@ -29,7 +70,7 @@ func Load(path string) (*Config, error) {
 // Validate checks that all required fields are present and valid
 func (c *Config) Validate() error {
 	if len(c.ChartVersions) == 0 {
-		return fmt.Errorf("no chart versions defined")
+		return errors.New("no chart versions defined")
 	}
 
 	for major, chartCfg := range c.ChartVersions {
@@ -49,7 +90,7 @@ func (c *Config) Validate() error {
 	}
 
 	if c.BaseImage.BciVersion == "" {
-		return fmt.Errorf("base-image.bci-version is required")
+		return errors.New("base-image.bci-version is required")
 	}
 
 	// Validate cluster repos
@@ -57,17 +98,26 @@ func (c *Config) Validate() error {
 	for _, repo := range requiredRepos {
 		repoConfig, exists := c.ClusterRepos[repo]
 		if !exists {
-			return fmt.Errorf("cluster-repos.%s is required", repo)
+			return clusterRepoKeyErr(repo, "")
 		}
 		if repoConfig.URL == "" {
-			return fmt.Errorf("cluster-repos.%s.url is required", repo)
+			return clusterRepoKeyErr(repo, "url")
 		}
 		if repoConfig.Path == "" {
-			return fmt.Errorf("cluster-repos.%s.path is required", repo)
+			return clusterRepoKeyErr(repo, "path")
 		}
 	}
 
 	return nil
+}
+
+func clusterRepoKeyErr(repo, key string) error {
+	text := "cluster-repos." + repo
+	if key != "" {
+		text += "." + key
+	}
+	text += " is required"
+	return errors.New(text)
 }
 
 // validateBuildConfig validates a single build configuration
@@ -88,16 +138,16 @@ func validateBuildConfig(major, buildType string, cfg BuildConfig) error {
 func (c *Config) GetBuildConfig(major string, buildType BuildType) (*BuildConfig, error) {
 	chartCfg, exists := c.ChartVersions[major]
 	if !exists {
-		return nil, fmt.Errorf("Rancher minor %s not found in config", major)
+		return nil, errors.New("rancher minor " + major + " not found in config")
 	}
 
 	switch buildType {
-	case BuildTypeProd:
+	case buildTypeProd:
 		return &chartCfg.Prod, nil
-	case BuildTypeDev:
+	case buildTypeDev:
 		return &chartCfg.Dev, nil
 	default:
-		return nil, fmt.Errorf("invalid build type: %s", buildType)
+		return nil, errors.New("invalid build type: " + string(buildType))
 	}
 }
 
@@ -105,7 +155,7 @@ func (c *Config) GetBuildConfig(major string, buildType BuildType) (*BuildConfig
 func (c *Config) GetChartVersion(major string) (*ChartVersionConfig, error) {
 	chartCfg, exists := c.ChartVersions[major]
 	if !exists {
-		return nil, fmt.Errorf("Rancher minor %s not found in config", major)
+		return nil, errors.New("rancher minor " + major + " not found in config")
 	}
 	return &chartCfg, nil
 }

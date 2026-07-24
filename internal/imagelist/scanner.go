@@ -2,6 +2,7 @@ package imagelist
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -9,17 +10,42 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"text/template"
 
 	"github.com/rancher/ob-charts-tool/helmtools/chart"
 	"github.com/rancher/ob-charts-tool/helmtools/image"
 	"gopkg.in/yaml.v3"
+
+	"github.com/rancher/rancher-assets/internal/logger"
 )
 
-const (
-	// OS types
-	Linux   = "linux"
-	Windows = "windows"
-)
+// ImageReference represents a container image found in charts
+type ImageReference struct {
+	Image   string
+	OS      string
+	Sources []string
+}
+
+// InvalidImageEntry represents an invalid image reference with full context
+type InvalidImageEntry struct {
+	Image      string
+	Reason     string
+	CatalogRef string
+	Sources    []string
+}
+
+// ImageSet is a map of image -> set of sources
+type ImageSet map[string]map[string]struct{}
+
+// InvalidImageSet tracks invalid images with their context
+type InvalidImageSet map[string]*InvalidImageEntry
+
+// ExportConfig contains paths and settings for image list export
+type ExportConfig struct {
+	ChartsPath string // Path to extracted chart catalogs
+	Version    string // Chart image version being exported
+	OutputDir  string // Directory to write output files
+}
 
 // ScanResult contains both valid and invalid image references
 type ScanResult struct {
@@ -30,7 +56,14 @@ type ScanResult struct {
 // CatalogResults maps catalog name to its scan results
 type CatalogResults map[string]*ScanResult
 
+// SkipChecker is a logic predicate to decide if a item should be skipped
 type SkipChecker func(entry chart.IndexEntry) bool
+
+// OS types
+const (
+	Linux   = "linux"
+	Windows = "windows"
+)
 
 func skipOldCharts(_ chart.IndexEntry) bool {
 	return false
@@ -43,28 +76,28 @@ func ScanCharts(config ExportConfig) (CatalogResults, error) {
 
 	// Scan the three chart catalogs
 	catalogs := []struct {
+		skipChecker SkipChecker
 		name        string
 		path        string
-		skipChecker SkipChecker
 	}{
 		{
+			skipOldCharts,
 			"rancher-charts",
 			filepath.Join(config.ChartsPath, "rancher-charts"),
-			skipOldCharts,
 		},
-		{"rancher-partner-charts", filepath.Join(config.ChartsPath, "rancher-partner-charts"), nil},
-		{"rancher-rke2-charts", filepath.Join(config.ChartsPath, "rancher-rke2-charts"), nil},
+		{nil, "rancher-partner-charts", filepath.Join(config.ChartsPath, "rancher-partner-charts")},
+		{nil, "rancher-rke2-charts", filepath.Join(config.ChartsPath, "rancher-rke2-charts")},
 	}
 
 	for _, catalog := range catalogs {
 		// Find the actual catalog directory (it has a hash suffix)
 		catalogPath, err := findCatalogDir(catalog.path)
 		if err != nil {
-			fmt.Printf("Warning: skipping %s: %v\n", catalog.name, err)
+			logger.Warn("Warning: skipping %s: %v", catalog.name, err)
 			continue
 		}
 
-		fmt.Printf("  Scanning %s...\n", catalog.name)
+		logger.Info("  Scanning %s...", catalog.name)
 
 		// Create separate tracking sets for this catalog
 		imagesSet := make(ImageSet)
@@ -99,7 +132,7 @@ func findCatalogDir(basePath string) (string, error) {
 	if info, err := os.Stat(basePath); err == nil && info.IsDir() {
 		entries, err := os.ReadDir(basePath)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to read directory: %w", err)
 		}
 
 		// Look for first subdirectory (should be the hash)
@@ -117,8 +150,30 @@ func findCatalogDir(basePath string) (string, error) {
 	return "", fmt.Errorf("catalog directory not found at %s", basePath)
 }
 
+// processValuesYAML extracts images from a values.yaml file data
+func processValuesYAML(data []byte, source, catalogRef string, imagesSet ImageSet, invalidSet InvalidImageSet) {
+	// Use helmtools to extract images
+	images, err := image.ExtractImages(data, "")
+	if err != nil {
+		// Skip invalid YAML
+		return
+	}
+
+	// Process extracted images and add to our tracking sets
+	for _, img := range images.Values() {
+		imageRef := formatImageReference(img)
+		addImage(imagesSet, invalidSet, imageRef, source, catalogRef)
+	}
+
+	// Also scan for legacy patterns not covered by helmtools
+	var values map[string]interface{}
+	if err := yaml.Unmarshal(data, &values); err == nil {
+		extractLegacyImages(values, source, catalogRef, imagesSet, invalidSet)
+	}
+}
+
 // scanCatalog scans a single chart catalog
-func scanCatalog(catalogPath string, catalogName string, imagesSet ImageSet, invalidSet InvalidImageSet, shouldSkipChart SkipChecker) error {
+func scanCatalog(catalogPath, catalogName string, imagesSet ImageSet, invalidSet InvalidImageSet, shouldSkipChart SkipChecker) error {
 	indexPath := filepath.Join(catalogPath, "index.yaml")
 
 	// Load index.yaml
@@ -145,19 +200,19 @@ func scanCatalog(catalogPath string, catalogName string, imagesSet ImageSet, inv
 
 		// Check if chart should be skipped
 		if shouldSkipChart(version) {
-			fmt.Printf("    Warning: skipping %s\n", chartSource)
+			logger.Warn("    Warning: skipping %s", chartSource)
 			continue
 		}
 
 		// Find and extract the chart archive
 		if len(version.URLs) == 0 {
-			fmt.Printf("    Warning: no URLs for %s\n", chartSource)
+			logger.Warn("    Warning: no URLs for %s", chartSource)
 			continue
 		}
 
 		chartPath := filepath.Join(catalogPath, version.URLs[0])
 		if err := extractImagesFromChart(chartPath, chartSource, catalogName, imagesSet, invalidSet); err != nil {
-			fmt.Printf("    Warning: failed to scan %s: %v\n", chartSource, err)
+			logger.Warn("    Warning: failed to scan %s: %v", chartSource, err)
 			continue
 		}
 	}
@@ -166,18 +221,26 @@ func scanCatalog(catalogPath string, catalogName string, imagesSet ImageSet, inv
 }
 
 // extractImagesFromChart extracts image references from a chart .tgz file
-func extractImagesFromChart(chartPath string, source string, catalogRef string, imagesSet ImageSet, invalidSet InvalidImageSet) error {
+func extractImagesFromChart(chartPath, source, catalogRef string, imagesSet ImageSet, invalidSet InvalidImageSet) error {
 	file, err := os.Open(chartPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			logger.Warn("failed to close file: %v", closeErr)
+		}
+	}()
 
 	gzr, err := gzip.NewReader(file)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open gzip reader: %w", err)
 	}
-	defer gzr.Close()
+	defer func() {
+		if closeErr := gzr.Close(); closeErr != nil {
+			logger.Warn("failed to close gzip reader: %v", closeErr)
+		}
+	}()
 
 	tr := tar.NewReader(gzr)
 
@@ -187,34 +250,17 @@ func extractImagesFromChart(chartPath string, source string, catalogRef string, 
 			break
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to advance to next file in tar: %w", err)
 		}
 
 		// Look for values.yaml files
 		if strings.HasSuffix(header.Name, "values.yaml") {
 			data, err := io.ReadAll(tr)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to read file: %w", err)
 			}
 
-			// Use helmtools to extract images
-			images, err := image.ExtractImages(data, "")
-			if err != nil {
-				// Skip invalid YAML
-				continue
-			}
-
-			// Process extracted images and add to our tracking sets
-			for _, img := range images.Values() {
-				imageRef := formatImageReference(img)
-				addImage(imagesSet, invalidSet, imageRef, source, catalogRef)
-			}
-
-			// Also scan for legacy patterns not covered by helmtools
-			var values map[string]interface{}
-			if err := yaml.Unmarshal(data, &values); err == nil {
-				extractLegacyImages(values, source, catalogRef, imagesSet, invalidSet)
-			}
+			processValuesYAML(data, source, catalogRef, imagesSet, invalidSet)
 		}
 	}
 
@@ -244,7 +290,7 @@ func formatImageReference(img image.Image) string {
 
 // extractLegacyImages handles image patterns not covered by helmtools
 // This includes direct image strings and systemDefaultRegistry overrides
-func extractLegacyImages(values interface{}, source string, catalogRef string, imagesSet ImageSet, invalidSet InvalidImageSet) {
+func extractLegacyImages(values interface{}, source, catalogRef string, imagesSet ImageSet, invalidSet InvalidImageSet) {
 	switch v := values.(type) {
 	case map[string]interface{}:
 		// Check for direct "image" string field (not structured as registry/repo/tag)
@@ -269,7 +315,7 @@ func extractLegacyImages(values interface{}, source string, catalogRef string, i
 }
 
 // addImage adds an image to the set with its source, or tracks it as invalid
-func addImage(imagesSet ImageSet, invalidSet InvalidImageSet, image string, source string, catalogRef string) {
+func addImage(imagesSet ImageSet, invalidSet InvalidImageSet, image, source, catalogRef string) {
 	if image == "" {
 		return
 	}
@@ -284,11 +330,15 @@ func addImage(imagesSet ImageSet, invalidSet InvalidImageSet, image string, sour
 
 	// Validate the image reference
 	if err := validateImage(image); err != nil {
-		// Track as invalid and emit warning
-		reason := err.Error()
-		addInvalidImage(invalidSet, image, reason, source, catalogRef)
-		fmt.Printf("    ⚠️  Invalid image in %s/%s: %s - %s\n", catalogRef, source, image, reason)
-		return
+		if !IsWarning(err) {
+			// Hard validation error - track as invalid
+			reason := err.Error()
+			addInvalidImage(invalidSet, image, reason, source, catalogRef)
+			logger.Warn("    Invalid image in %s/%s: %s - %s", catalogRef, source, image, reason)
+			return
+		}
+		// Log warning but allow the image through
+		logger.Warn("    Warning for image in %s/%s: %s - %s", catalogRef, source, image, err.Error())
 	}
 
 	// Add to valid images set
@@ -300,11 +350,11 @@ func addImage(imagesSet ImageSet, invalidSet InvalidImageSet, image string, sour
 
 // imagesToList converts ImageSet to sorted list of ImageReferences
 func imagesToList(imagesSet ImageSet) []ImageReference {
-	var refs []ImageReference
+	refs := make([]ImageReference, 0, len(imagesSet))
 
 	// Convert to list
 	for image, sources := range imagesSet {
-		var sourcesList []string
+		sourcesList := make([]string, 0, len(sources))
 		for source := range sources {
 			sourcesList = append(sourcesList, source)
 		}
@@ -333,7 +383,7 @@ func imagesToList(imagesSet ImageSet) []ImageReference {
 
 // invalidImagesToList converts InvalidImageSet to sorted list of InvalidImageEntries
 func invalidImagesToList(invalidSet InvalidImageSet) []InvalidImageEntry {
-	var entries []InvalidImageEntry
+	entries := make([]InvalidImageEntry, 0, len(invalidSet))
 
 	// Convert to list
 	for _, entry := range invalidSet {
@@ -353,14 +403,33 @@ func invalidImagesToList(invalidSet InvalidImageSet) []InvalidImageEntry {
 	return entries
 }
 
+// writeImageListFile writes a single image list file for a specific OS type
+func writeImageListFile(outputDir, catalogName, suffix string, images []ImageReference) error {
+	if len(images) == 0 {
+		return nil
+	}
+
+	filename := catalogName + suffix
+	imageListPath := filepath.Join(outputDir, filename)
+	var imageList []string
+	for _, img := range images {
+		imageList = append(imageList, img.Image)
+	}
+	if err := writeLines(imageListPath, imageList); err != nil {
+		return err
+	}
+	logger.Info("  - %s (%d images)", filename, len(images))
+	return nil
+}
+
 // WriteImageLists generates one image list file per catalog
 func WriteImageLists(results CatalogResults, config ExportConfig) error {
 	// Ensure output directory exists
-	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
-		return err
+	if err := os.MkdirAll(config.OutputDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create output dir: %w", err)
 	}
 
-	fmt.Printf("\nGenerating image lists in %s/:\n", config.OutputDir)
+	logger.Info("\nGenerating image lists in %s/:", config.OutputDir)
 
 	// Process each catalog separately
 	for catalogName, result := range results {
@@ -377,29 +446,13 @@ func WriteImageLists(results CatalogResults, config ExportConfig) error {
 		}
 
 		// Generate main image list file (Linux images)
-		if len(linuxImages) > 0 {
-			imageListPath := filepath.Join(config.OutputDir, catalogName+"-images.txt")
-			var imageList []string
-			for _, img := range linuxImages {
-				imageList = append(imageList, img.Image)
-			}
-			if err := writeLines(imageListPath, imageList); err != nil {
-				return err
-			}
-			fmt.Printf("  - %s-images.txt (%d images)\n", catalogName, len(linuxImages))
+		if err := writeImageListFile(config.OutputDir, catalogName, "-images.txt", linuxImages); err != nil {
+			return err
 		}
 
 		// Generate Windows image list file if needed
-		if len(windowsImages) > 0 {
-			imageListPath := filepath.Join(config.OutputDir, catalogName+"-windows-images.txt")
-			var imageList []string
-			for _, img := range windowsImages {
-				imageList = append(imageList, img.Image)
-			}
-			if err := writeLines(imageListPath, imageList); err != nil {
-				return err
-			}
-			fmt.Printf("  - %s-windows-images.txt (%d images)\n", catalogName, len(windowsImages))
+		if err := writeImageListFile(config.OutputDir, catalogName, "-windows-images.txt", windowsImages); err != nil {
+			return err
 		}
 
 		// Generate invalid images report if there are any
@@ -407,8 +460,22 @@ func WriteImageLists(results CatalogResults, config ExportConfig) error {
 			if err := writeInvalidImagesReport(catalogName, result.InvalidImages, config.OutputDir); err != nil {
 				return err
 			}
-			fmt.Printf("  - %s-invalid-images.txt (%d invalid entries) ⚠️\n", catalogName, len(result.InvalidImages))
+			logger.Info("  - %s-invalid-images.txt (%d invalid entries) ⚠️", catalogName, len(result.InvalidImages))
 		}
+	}
+
+	return nil
+}
+
+// writeLines writes a slice of strings to a file, one per line
+func writeLines(path string, lines []string) error {
+	content := strings.Join(lines, "\n")
+	if len(lines) > 0 {
+		content += "\n" // Ensure trailing newline
+	}
+
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("failed to write to file: %w", err)
 	}
 
 	return nil
@@ -418,43 +485,52 @@ func WriteImageLists(results CatalogResults, config ExportConfig) error {
 func writeInvalidImagesReport(catalogName string, invalidImages []InvalidImageEntry, outputDir string) error {
 	path := filepath.Join(outputDir, catalogName+"-invalid-images.txt")
 
-	var lines []string
+	var buf bytes.Buffer
 
-	// Add header explaining the file
-	lines = append(lines, "# Invalid Image References Report")
-	lines = append(lines, "#")
-	lines = append(lines, "# This file contains image references that were found in chart values.yaml files")
-	lines = append(lines, "# but failed validation. These are typically placeholder values that need to be")
-	lines = append(lines, "# fixed in the source charts.")
-	lines = append(lines, "#")
-	lines = append(lines, "# Format:")
-	lines = append(lines, "# Image: <invalid-image-reference>")
-	lines = append(lines, "# Reason: <why-it-failed-validation>")
-	lines = append(lines, "# Catalog: <cluster-repo-catalog>")
-	lines = append(lines, "# Sources: <chart:version> [<chart:version> ...]")
-	lines = append(lines, "#")
-	lines = append(lines, "# Total invalid entries: "+fmt.Sprintf("%d", len(invalidImages)))
-	lines = append(lines, "")
+	// Parse and execute header template
+	headerTmpl, err := template.New("header").Parse(imageRefsReport)
+	if err != nil {
+		return fmt.Errorf("failed to parse header template: %w", err)
+	}
 
-	// Add each invalid entry with full context
-	for i, entry := range invalidImages {
-		if i > 0 {
-			lines = append(lines, "") // Blank line between entries
+	headerData := struct {
+		InvalidCount int
+	}{
+		InvalidCount: len(invalidImages),
+	}
+
+	if execErr := headerTmpl.Execute(&buf, headerData); execErr != nil {
+		return fmt.Errorf("failed to execute header template: %w", execErr)
+	}
+
+	// Parse item template
+	itemTmpl, err := template.New("item").Parse(imageRefItem)
+	if err != nil {
+		return fmt.Errorf("failed to parse item template: %w", err)
+	}
+
+	// Add each invalid entry using template
+	for _, entry := range invalidImages {
+		itemData := struct {
+			Image      string
+			Reason     string
+			CatalogRef string
+			Sources    string
+		}{
+			Image:      entry.Image,
+			Reason:     entry.Reason,
+			CatalogRef: entry.CatalogRef,
+			Sources:    strings.Join(entry.Sources, ", "),
 		}
-		lines = append(lines, fmt.Sprintf("Image: %s", entry.Image))
-		lines = append(lines, fmt.Sprintf("Reason: %s", entry.Reason))
-		lines = append(lines, fmt.Sprintf("Catalog: %s", entry.CatalogRef))
-		lines = append(lines, fmt.Sprintf("Sources: %s", strings.Join(entry.Sources, ", ")))
+
+		if err := itemTmpl.Execute(&buf, itemData); err != nil {
+			return fmt.Errorf("failed to execute item template: %w", err)
+		}
 	}
 
-	return writeLines(path, lines)
-}
-
-// writeLines writes a slice of strings to a file, one per line
-func writeLines(path string, lines []string) error {
-	content := strings.Join(lines, "\n")
-	if len(lines) > 0 {
-		content += "\n" // Ensure trailing newline
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		return fmt.Errorf("failed to write report to file: %w", err)
 	}
-	return os.WriteFile(path, []byte(content), 0644)
+
+	return nil
 }

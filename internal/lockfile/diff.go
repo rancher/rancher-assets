@@ -1,6 +1,8 @@
 package lockfile
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 
@@ -9,14 +11,14 @@ import (
 
 // ChangedMajors compares two lock files and returns Rancher minors with upstream ref changes.
 // Ignores timestamp changes (fetched-at) and only reports actual commit changes.
-func ChangedMajors(fromCommit, toCommit string) ([]string, error) {
+func ChangedMajors(ctx context.Context, fromCommit, toCommit string) ([]string, error) {
 	// Load lock files from commits
-	fromLock, err := loadLockFromCommit(fromCommit)
+	fromLock, err := loadLockFromCommit(ctx, fromCommit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load lock from %s: %w", fromCommit, err)
 	}
 
-	toLock, err := loadLockFromCommit(toCommit)
+	toLock, err := loadLockFromCommit(ctx, toCommit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load lock from %s: %w", toCommit, err)
 	}
@@ -73,13 +75,14 @@ func refSetChanged(from, to UpstreamRefsSet) bool {
 }
 
 // loadLockFromCommit loads lock.yaml from a git commit
-func loadLockFromCommit(commit string) (*Lock, error) {
+func loadLockFromCommit(ctx context.Context, commit string) (*Lock, error) {
 	// Run: git show <commit>:lock.yaml
-	cmd := exec.Command("git", "show", fmt.Sprintf("%s:lock.yaml", commit))
+	cmd := exec.CommandContext(ctx, "git", "show", commit+":lock.yaml")
 	output, err := cmd.Output()
 	if err != nil {
 		// If lock.yaml doesn't exist at this commit, return empty lock
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 128 {
+		exitErr := &exec.ExitError{}
+		if errors.As(err, &exitErr) {
 			return &Lock{ChartVersions: make(map[string]ChartVersionLock)}, nil
 		}
 		return nil, fmt.Errorf("git show failed: %w", err)

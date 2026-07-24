@@ -8,7 +8,44 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const GeneratorVersion = "v0.1.0"
+// Lock represents the complete lock file state
+type Lock struct {
+	ChartVersions    map[string]ChartVersionLock `yaml:"chart-versions"`
+	CopyScriptHash   string                      `yaml:"copy-script-hash"`
+	GeneratedAt      *time.Time                  `yaml:"generated-at"`
+	GeneratorVersion string                      `yaml:"generator-version"`
+}
+
+// ChartVersionLock tracks state for a single Rancher minor version
+type ChartVersionLock struct {
+	LatestStable     *string             `yaml:"latest-stable"`
+	LatestPrerelease *string             `yaml:"latest-prerelease"`
+	UpdatedAt        *time.Time          `yaml:"updated-at"`
+	UpstreamRefs     UpstreamRefsByBuild `yaml:"upstream-refs"`
+}
+
+// UpstreamRefsByBuild separates prod and dev upstream refs
+type UpstreamRefsByBuild struct {
+	Prod UpstreamRefsSet `yaml:"prod"`
+	Dev  UpstreamRefsSet `yaml:"dev"`
+}
+
+// UpstreamRefsSet holds refs for charts, partner, and rke2
+type UpstreamRefsSet struct {
+	Charts  UpstreamRef `yaml:"charts"`
+	Partner UpstreamRef `yaml:"partner"`
+	Rke2    UpstreamRef `yaml:"rke2"`
+}
+
+// UpstreamRef tracks an upstream repository reference
+type UpstreamRef struct {
+	FetchedAt *time.Time `yaml:"fetched-at"`
+	Branch    string     `yaml:"branch"`
+	Commit    string     `yaml:"commit"`
+}
+
+// generatorVersion should be bumped if any major changes to the generator/hash/lock are made.
+const generatorVersion = "v0.1.0"
 
 // Load reads and parses the lock.yaml file
 // If the file doesn't exist, returns an empty lock structure
@@ -19,7 +56,7 @@ func Load(path string) (*Lock, error) {
 			// Return empty lock structure
 			return &Lock{
 				ChartVersions:    make(map[string]ChartVersionLock),
-				GeneratorVersion: GeneratorVersion,
+				GeneratorVersion: generatorVersion,
 			}, nil
 		}
 		return nil, fmt.Errorf("failed to read lock file: %w", err)
@@ -37,14 +74,14 @@ func Load(path string) (*Lock, error) {
 func (l *Lock) Save(path string) error {
 	now := time.Now().UTC()
 	l.GeneratedAt = &now
-	l.GeneratorVersion = GeneratorVersion
+	l.GeneratorVersion = generatorVersion
 
 	data, err := yaml.Marshal(l)
 	if err != nil {
 		return fmt.Errorf("failed to marshal lock file: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write lock file: %w", err)
 	}
 

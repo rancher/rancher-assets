@@ -1,6 +1,7 @@
 package lockfile
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -8,9 +9,9 @@ import (
 )
 
 // QueryUpstreamCommit queries the latest commit SHA for a given repo and branch
-func QueryUpstreamCommit(repoURL string, branch string) (string, error) {
+func QueryUpstreamCommit(ctx context.Context, repoURL, branch string) (string, error) {
 	// Use git ls-remote to get the latest commit for the branch
-	cmd := exec.Command("git", "ls-remote", repoURL, fmt.Sprintf("refs/heads/%s", branch))
+	cmd := exec.CommandContext(ctx, "git", "ls-remote", repoURL, "refs/heads/"+branch)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to query upstream %s @ %s: %w", repoURL, branch, err)
@@ -27,8 +28,8 @@ func QueryUpstreamCommit(repoURL string, branch string) (string, error) {
 }
 
 // QueryUpstreamRef queries upstream and returns an UpstreamRef
-func QueryUpstreamRef(repoURL string, branch string) (UpstreamRef, error) {
-	commit, err := QueryUpstreamCommit(repoURL, branch)
+func QueryUpstreamRef(ctx context.Context, repoURL, branch string) (UpstreamRef, error) {
+	commit, err := QueryUpstreamCommit(ctx, repoURL, branch)
 	if err != nil {
 		return UpstreamRef{}, err
 	}

@@ -6,9 +6,17 @@ import (
 	"time"
 )
 
+// ReleasePlan is a JSON plan output for workflows
+// No longer needs versions.yaml - CalVer timestamps are self-generating
+type ReleasePlan struct {
+	RancherMinor string `json:"rancher_minor"` // e.g., "2.14", "2.15"
+	ReleaseType  string `json:"release_type"`  // "stable" or "prerelease"
+	Version      string `json:"version"`       // CalVer timestamp: v2.15-20260716T1430Z[-dev]
+}
+
 // GenerateCalVerTimestamp creates a CalVer version string with UTC timestamp
 // Format: v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]
-func GenerateCalVerTimestamp(rancherMinor string, releaseType string) string {
+func GenerateCalVerTimestamp(rancherMinor, releaseType string) string {
 	now := time.Now().UTC()
 	timestamp := now.Format("20060102T1504Z") // ISO 8601: YYYYMMDDThhmmZ
 
@@ -24,7 +32,7 @@ func GenerateCalVerTimestamp(rancherMinor string, releaseType string) string {
 //
 //	v2.14-20260716T1430Z     -> ("2.14", "stable", nil)
 //	v2.15-20260805T1600Z-dev -> ("2.15", "prerelease", nil)
-func ParseCalVerTag(tag string) (rancherMinor string, releaseType string, err error) {
+func ParseCalVerTag(tag string) (rancherMinor, releaseType string, err error) {
 	// Regex: v(\d+\.\d+)-\d{8}T\d{4}Z(-dev)?
 	re := regexp.MustCompile(`^v(\d+\.\d+)-\d{8}T\d{4}Z(-dev)?$`)
 	matches := re.FindStringSubmatch(tag)
@@ -44,7 +52,7 @@ func ParseCalVerTag(tag string) (rancherMinor string, releaseType string, err er
 // PlanAutoPrerelease generates CalVer prerelease versions for changed Rancher minors
 // No version arithmetic needed - timestamps are self-generating
 func PlanAutoPrerelease(changedMinors []string) ([]ReleasePlan, error) {
-	var plans []ReleasePlan
+	plans := make([]ReleasePlan, 0, len(changedMinors))
 	for _, minor := range changedMinors {
 		version := GenerateCalVerTimestamp(minor, "prerelease")
 		plans = append(plans, ReleasePlan{

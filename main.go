@@ -1,16 +1,21 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"sort"
+	"syscall"
 
 	"github.com/rancher/rancher-assets/internal/config"
 	"github.com/rancher/rancher-assets/internal/generator"
 	"github.com/rancher/rancher-assets/internal/imagelist"
 	"github.com/rancher/rancher-assets/internal/lockfile"
+	"github.com/rancher/rancher-assets/internal/logger"
 	"github.com/rancher/rancher-assets/internal/versions"
 )
 
@@ -27,72 +32,75 @@ func main() {
 		os.Exit(1)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	command := os.Args[1]
 
 	switch command {
 	case "generate":
-		if err := generateCommand(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		if err := generateCommand(ctx); err != nil {
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	case "changed-majors":
 		// Deprecated - use changed-minors
-		if err := changedMinorsCommand(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		if err := changedMinorsCommand(ctx); err != nil {
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	case "changed-minors":
-		if err := changedMinorsCommand(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		if err := changedMinorsCommand(ctx); err != nil {
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	case "list-minors":
-		if err := listMinorsCommand(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		if err := listMinorsCommand(ctx); err != nil {
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	case "calver-dev-version":
-		if err := calverDevVersionCommand(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		if err := calverDevVersionCommand(ctx); err != nil {
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	case "plan-release":
-		if err := planReleaseCommand(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		if err := planReleaseCommand(ctx); err != nil {
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	case "export-images":
-		if err := exportImagesCommand(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		if err := exportImagesCommand(ctx); err != nil {
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
+		logger.Error("Unknown command: %s", command)
 		printUsage()
 		os.Exit(1)
 	}
 }
 
 func printUsage() {
-	fmt.Println("Usage: rancher-assets <command>")
-	fmt.Println("")
-	fmt.Println("Commands:")
-	fmt.Println("  generate             Generate Dockerfiles and update lock.yaml")
-	fmt.Println("  changed-minors       Detect Rancher minors with upstream ref changes")
-	fmt.Println("                       Flags: --from=<commit> --to=<commit>")
-	fmt.Println("  list-minors          List all Rancher minors from config.yaml")
-	fmt.Println("  calver-dev-version   Generate CalVer dev version for a Rancher minor")
-	fmt.Println("                       Flags: --minor=<rancher-minor>")
-	fmt.Println("  plan-release         Plan CalVer versions for releases")
-	fmt.Println("                       Flags: --type=<auto|manual>")
-	fmt.Println("                              --changed-minors=<json> (for auto)")
-	fmt.Println("                              --minors=<json> --release=<stable|prerelease> (for manual)")
-	fmt.Println("  export-images        Generate image lists from chart catalogs")
-	fmt.Println("                       Flags: --charts-path=<path> --version=<version> --output-dir=<path>")
+	logger.Println("Usage: rancher-assets <command>")
+	logger.Println("")
+	logger.Println("Commands:")
+	logger.Println("  generate             Generate Dockerfiles and update lock.yaml")
+	logger.Println("  changed-minors       Detect Rancher minors with upstream ref changes")
+	logger.Println("                       Flags: --from=<commit> --to=<commit>")
+	logger.Println("  list-minors          List all Rancher minors from config.yaml")
+	logger.Println("  calver-dev-version   Generate CalVer dev version for a Rancher minor")
+	logger.Println("                       Flags: --minor=<rancher-minor>")
+	logger.Println("  plan-release         Plan CalVer versions for releases")
+	logger.Println("                       Flags: --type=<auto|manual>")
+	logger.Println("                              --changed-minors=<json> (for auto)")
+	logger.Println("                              --minors=<json> --release=<stable|prerelease> (for manual)")
+	logger.Println("  export-images        Generate image lists from chart catalogs")
+	logger.Println("                       Flags: --charts-path=<path> --version=<version> --output-dir=<path>")
 }
 
-func generateCommand() error {
-	fmt.Println("Loading configuration...")
+func generateCommand(ctx context.Context) error {
+	logger.Info("Loading configuration...")
 
 	// Load config
 	cfg, err := config.Load(configPath)
@@ -110,87 +118,87 @@ func generateCommand() error {
 	majors := cfg.ListChartMajors()
 	sort.Strings(majors)
 
-	fmt.Printf("Found %d Rancher minor versions: %v\n", len(majors), majors)
+	logger.Info("Found %d Rancher minor versions: %v", len(majors), majors)
 
 	// Compute copy script hash for reproducibility
-	fmt.Printf("\nComputing copy-charts.sh hash...\n")
+	logger.Info("\nComputing copy-charts.sh hash...")
 	scriptHash, err := lockfile.ComputeFileHash(copyScriptPath)
 	if err != nil {
 		return fmt.Errorf("failed to compute copy script hash: %w", err)
 	}
-	fmt.Printf("  Script hash: %s\n", scriptHash[:16]+"...")
+	logger.Info("  Script hash: %s", scriptHash[:16]+"...")
 	lock.CopyScriptHash = scriptHash
 
 	// Generate Dockerfiles and query upstream for each Rancher minor
 	for _, major := range majors {
-		fmt.Printf("\nProcessing Rancher minor: %s\n", major)
+		logger.Info("\nProcessing Rancher minor: %s", major)
 
 		// Ensure lock entry exists
 		lock.EnsureChartVersion(major)
 
 		// Query upstream repos first (before generation, so commits are available)
-		fmt.Printf("  Querying upstream repositories...\n")
+		logger.Info("  Querying upstream repositories...")
 		chartCfg, _ := cfg.GetChartVersion(major)
 
 		// Query both prod and dev branches
 		var prodRefs, devRefs lockfile.UpstreamRefsSet
 
 		// Query PROD branches
-		fmt.Printf("    [prod]\n")
-		fmt.Printf("      - charts @ %s: ", chartCfg.Prod.ChartsBranch)
-		chartsRef, err := lockfile.QueryUpstreamRef(cfg.ClusterRepos["charts"].URL, chartCfg.Prod.ChartsBranch)
+		logger.Info("    [prod]")
+		logger.StartProgress("      - charts @ %s: ", chartCfg.Prod.ChartsBranch)
+		chartsRef, err := lockfile.QueryUpstreamRef(ctx, cfg.ClusterRepos["charts"].URL, chartCfg.Prod.ChartsBranch)
 		if err != nil {
-			fmt.Printf("FAILED (%v)\n", err)
+			logger.CompleteProgress("FAILED (%v)", err)
 			return fmt.Errorf("failed to query charts upstream: %w", err)
 		}
-		fmt.Printf("%s\n", chartsRef.Commit[:8])
+		logger.CompleteProgress("%s", chartsRef.Commit[:8])
 		prodRefs.Charts = chartsRef
 
-		fmt.Printf("      - partner @ %s: ", chartCfg.Prod.PartnerBranch)
-		partnerRef, err := lockfile.QueryUpstreamRef(cfg.ClusterRepos["partner"].URL, chartCfg.Prod.PartnerBranch)
+		logger.StartProgress("      - partner @ %s: ", chartCfg.Prod.PartnerBranch)
+		partnerRef, err := lockfile.QueryUpstreamRef(ctx, cfg.ClusterRepos["partner"].URL, chartCfg.Prod.PartnerBranch)
 		if err != nil {
-			fmt.Printf("FAILED (%v)\n", err)
+			logger.CompleteProgress("FAILED (%v)", err)
 			return fmt.Errorf("failed to query partner upstream: %w", err)
 		}
-		fmt.Printf("%s\n", partnerRef.Commit[:8])
+		logger.CompleteProgress("%s", partnerRef.Commit[:8])
 		prodRefs.Partner = partnerRef
 
-		fmt.Printf("      - rke2 @ %s: ", chartCfg.Prod.Rke2Branch)
-		rke2Ref, err := lockfile.QueryUpstreamRef(cfg.ClusterRepos["rke2"].URL, chartCfg.Prod.Rke2Branch)
+		logger.StartProgress("      - rke2 @ %s: ", chartCfg.Prod.Rke2Branch)
+		rke2Ref, err := lockfile.QueryUpstreamRef(ctx, cfg.ClusterRepos["rke2"].URL, chartCfg.Prod.Rke2Branch)
 		if err != nil {
-			fmt.Printf("FAILED (%v)\n", err)
+			logger.CompleteProgress("FAILED (%v)", err)
 			return fmt.Errorf("failed to query rke2 upstream: %w", err)
 		}
-		fmt.Printf("%s\n", rke2Ref.Commit[:8])
+		logger.CompleteProgress("%s", rke2Ref.Commit[:8])
 		prodRefs.Rke2 = rke2Ref
 
 		// Query DEV branches
-		fmt.Printf("    [dev]\n")
-		fmt.Printf("      - charts @ %s: ", chartCfg.Dev.ChartsBranch)
-		chartsRef, err = lockfile.QueryUpstreamRef(cfg.ClusterRepos["charts"].URL, chartCfg.Dev.ChartsBranch)
+		logger.Info("    [dev]")
+		logger.StartProgress("      - charts @ %s: ", chartCfg.Dev.ChartsBranch)
+		chartsRef, err = lockfile.QueryUpstreamRef(ctx, cfg.ClusterRepos["charts"].URL, chartCfg.Dev.ChartsBranch)
 		if err != nil {
-			fmt.Printf("FAILED (%v)\n", err)
+			logger.CompleteProgress("FAILED (%v)", err)
 			return fmt.Errorf("failed to query charts upstream: %w", err)
 		}
-		fmt.Printf("%s\n", chartsRef.Commit[:8])
+		logger.CompleteProgress("%s", chartsRef.Commit[:8])
 		devRefs.Charts = chartsRef
 
-		fmt.Printf("      - partner @ %s: ", chartCfg.Dev.PartnerBranch)
-		partnerRef, err = lockfile.QueryUpstreamRef(cfg.ClusterRepos["partner"].URL, chartCfg.Dev.PartnerBranch)
+		logger.StartProgress("      - partner @ %s: ", chartCfg.Dev.PartnerBranch)
+		partnerRef, err = lockfile.QueryUpstreamRef(ctx, cfg.ClusterRepos["partner"].URL, chartCfg.Dev.PartnerBranch)
 		if err != nil {
-			fmt.Printf("FAILED (%v)\n", err)
+			logger.CompleteProgress("FAILED (%v)", err)
 			return fmt.Errorf("failed to query partner upstream: %w", err)
 		}
-		fmt.Printf("%s\n", partnerRef.Commit[:8])
+		logger.CompleteProgress("%s", partnerRef.Commit[:8])
 		devRefs.Partner = partnerRef
 
-		fmt.Printf("      - rke2 @ %s: ", chartCfg.Dev.Rke2Branch)
-		rke2Ref, err = lockfile.QueryUpstreamRef(cfg.ClusterRepos["rke2"].URL, chartCfg.Dev.Rke2Branch)
+		logger.StartProgress("      - rke2 @ %s: ", chartCfg.Dev.Rke2Branch)
+		rke2Ref, err = lockfile.QueryUpstreamRef(ctx, cfg.ClusterRepos["rke2"].URL, chartCfg.Dev.Rke2Branch)
 		if err != nil {
-			fmt.Printf("FAILED (%v)\n", err)
+			logger.CompleteProgress("FAILED (%v)", err)
 			return fmt.Errorf("failed to query rke2 upstream: %w", err)
 		}
-		fmt.Printf("%s\n", rke2Ref.Commit[:8])
+		logger.CompleteProgress("%s", rke2Ref.Commit[:8])
 		devRefs.Rke2 = rke2Ref
 
 		// Update lock file with both prod and dev refs
@@ -199,30 +207,30 @@ func generateCommand() error {
 		}
 
 		// Generate Dockerfile (after updating lock, so commits are available)
-		fmt.Printf("  Generating Dockerfile.%s...\n", major)
+		logger.Info("  Generating Dockerfile.%s...", major)
 		if err := generator.Generate(cfg, lock, major, dockerfilesDir); err != nil {
 			return fmt.Errorf("failed to generate Dockerfile for %s: %w", major, err)
 		}
 	}
 
 	// Save lock file
-	fmt.Printf("\nSaving lock file...\n")
+	logger.Info("\nSaving lock file...")
 	if err := lock.Save(lockPath); err != nil {
 		return fmt.Errorf("failed to save lock file: %w", err)
 	}
 
-	fmt.Println("\n✅ Generation complete!")
-	fmt.Println("\nGenerated files:")
+	logger.Success("\nGeneration complete!")
+	logger.Info("\nGenerated files:")
 	for _, major := range majors {
-		fmt.Printf("  - dockerfiles/Dockerfile.%s\n", major)
+		logger.Info("  - dockerfiles/Dockerfile.%s", major)
 	}
-	fmt.Printf("  - %s\n", lockPath)
-	fmt.Println("\nReview changes with: git diff dockerfiles/ lock.yaml")
+	logger.Info("  - %s", lockPath)
+	logger.Info("\nReview changes with: git diff dockerfiles/ lock.yaml")
 
 	return nil
 }
 
-func changedMinorsCommand() error {
+func changedMinorsCommand(ctx context.Context) error {
 	// Parse flags
 	fs := flag.NewFlagSet("changed-minors", flag.ExitOnError)
 	fromCommit := fs.String("from", "", "From commit (required)")
@@ -234,11 +242,11 @@ func changedMinorsCommand() error {
 	}
 
 	if *fromCommit == "" || *toCommit == "" {
-		return fmt.Errorf("both --from and --to are required")
+		return errors.New("both --from and --to are required")
 	}
 
 	// Get changed Rancher minors
-	changed, err := lockfile.ChangedMajors(*fromCommit, *toCommit)
+	changed, err := lockfile.ChangedMajors(ctx, *fromCommit, *toCommit)
 	if err != nil {
 		return err
 	}
@@ -254,12 +262,12 @@ func changedMinorsCommand() error {
 	if *verbose {
 		// Verbose output - show what changed
 		if len(changed) == 0 {
-			fmt.Println("No Rancher minors with upstream ref changes detected")
-			fmt.Println("(Only timestamp changes in lock.yaml)")
+			logger.Info("No Rancher minors with upstream ref changes detected")
+			logger.Info("(Only timestamp changes in lock.yaml)")
 		} else {
-			fmt.Printf("Changed Rancher minors (%d):\n", len(changed))
+			logger.Info("Changed Rancher minors (%d):", len(changed))
 			for _, minor := range changed {
-				fmt.Printf("  - %s\n", minor)
+				logger.Info("  - %s", minor)
 			}
 		}
 	}
@@ -270,11 +278,11 @@ func changedMinorsCommand() error {
 		return fmt.Errorf("failed to marshal output: %w", err)
 	}
 
-	fmt.Println(string(output))
+	logger.Println(string(output))
 	return nil
 }
 
-func listMinorsCommand() error {
+func listMinorsCommand(ctx context.Context) error {
 	// Load config
 	cfg, err := config.Load(configPath)
 	if err != nil {
@@ -289,13 +297,13 @@ func listMinorsCommand() error {
 
 	// Output each minor on its own line
 	for _, minor := range minors {
-		fmt.Println(minor)
+		logger.Println(minor)
 	}
 
 	return nil
 }
 
-func calverDevVersionCommand() error {
+func calverDevVersionCommand(ctx context.Context) error {
 	// Parse flags
 	fs := flag.NewFlagSet("calver-dev-version", flag.ExitOnError)
 	minor := fs.String("minor", "", "Rancher minor (e.g., 2.15)")
@@ -305,17 +313,17 @@ func calverDevVersionCommand() error {
 	}
 
 	if *minor == "" {
-		return fmt.Errorf("--minor is required")
+		return errors.New("--minor is required")
 	}
 
 	// Generate CalVer dev version
 	version := versions.GenerateCalVerTimestamp(*minor, "prerelease")
-	fmt.Println(version)
+	logger.Println(version)
 
 	return nil
 }
 
-func planReleaseCommand() error {
+func planReleaseCommand(ctx context.Context) error {
 	// Parse flags
 	fs := flag.NewFlagSet("plan-release", flag.ExitOnError)
 	planType := fs.String("type", "", "Plan type: auto or manual (required)")
@@ -329,7 +337,7 @@ func planReleaseCommand() error {
 	}
 
 	if *planType == "" {
-		return fmt.Errorf("--type is required")
+		return errors.New("--type is required")
 	}
 
 	var plans []versions.ReleasePlan
@@ -338,7 +346,7 @@ func planReleaseCommand() error {
 	switch *planType {
 	case "auto":
 		if *changedMinorsJSON == "" {
-			return fmt.Errorf("--changed-minors is required for auto type")
+			return errors.New("--changed-minors is required for auto type")
 		}
 
 		var changedMinors []string
@@ -353,7 +361,7 @@ func planReleaseCommand() error {
 
 	case "manual":
 		if *minorsJSON == "" || *releaseType == "" {
-			return fmt.Errorf("--minors and --release are required for manual type")
+			return errors.New("--minors and --release are required for manual type")
 		}
 
 		var minors []string
@@ -373,11 +381,11 @@ func planReleaseCommand() error {
 	// Verbose output
 	if *verbose {
 		if len(plans) == 0 {
-			fmt.Println("No releases planned")
+			logger.Info("No releases planned")
 		} else {
-			fmt.Printf("Planned releases (%d):\n", len(plans))
+			logger.Info("Planned releases (%d):", len(plans))
 			for _, plan := range plans {
-				fmt.Printf("  %s: %s (%s)\n",
+				logger.Info("  %s: %s (%s)",
 					plan.RancherMinor, plan.Version, plan.ReleaseType)
 			}
 		}
@@ -389,11 +397,11 @@ func planReleaseCommand() error {
 		return fmt.Errorf("failed to marshal output: %w", err)
 	}
 
-	fmt.Println(string(output))
+	logger.Println(string(output))
 	return nil
 }
 
-func exportImagesCommand() error {
+func exportImagesCommand(ctx context.Context) error {
 	// Parse flags
 	fs := flag.NewFlagSet("export-images", flag.ExitOnError)
 	chartsPath := fs.String("charts-path", "", "Path to extracted chart catalogs (required)")
@@ -405,7 +413,7 @@ func exportImagesCommand() error {
 	}
 
 	if *chartsPath == "" || *version == "" || *outputDir == "" {
-		return fmt.Errorf("--charts-path, --version, and --output-dir are required")
+		return errors.New("--charts-path, --version, and --output-dir are required")
 	}
 
 	config := imagelist.ExportConfig{
@@ -414,10 +422,10 @@ func exportImagesCommand() error {
 		OutputDir:  *outputDir,
 	}
 
-	fmt.Printf("Scanning chart catalogs for image references...\n")
-	fmt.Printf("  Charts path: %s\n", config.ChartsPath)
-	fmt.Printf("  Version: %s\n", config.Version)
-	fmt.Printf("  Output dir: %s\n\n", config.OutputDir)
+	logger.Info("Scanning chart catalogs for image references...")
+	logger.Info("  Charts path: %s", config.ChartsPath)
+	logger.Info("  Version: %s", config.Version)
+	logger.Info("  Output dir: %s\n", config.OutputDir)
 
 	// Scan charts for image references
 	results, err := imagelist.ScanCharts(config)
@@ -433,11 +441,11 @@ func exportImagesCommand() error {
 		totalInvalid += len(result.InvalidImages)
 	}
 
-	fmt.Printf("\nScan complete:\n")
-	fmt.Printf("  Catalogs scanned: %d\n", len(results))
-	fmt.Printf("  Total valid images: %d\n", totalValid)
+	logger.Info("\nScan complete:")
+	logger.Info("  Catalogs scanned: %d", len(results))
+	logger.Info("  Total valid images: %d", totalValid)
 	if totalInvalid > 0 {
-		fmt.Printf("  Total invalid images: %d ⚠️\n", totalInvalid)
+		logger.Info("  Total invalid images: %d ⚠️", totalInvalid)
 	}
 
 	// Write image lists and scripts
@@ -445,10 +453,10 @@ func exportImagesCommand() error {
 		return fmt.Errorf("failed to write image lists: %w", err)
 	}
 
-	fmt.Println("\n✅ Image list export complete!")
+	logger.Success("\nImage list export complete!")
 	if totalInvalid > 0 {
-		fmt.Printf("\n⚠️  Warning: %d invalid image references were found and excluded.\n", totalInvalid)
-		fmt.Printf("   See *-invalid-images.txt files in each catalog directory for details.\n")
+		logger.Warn("\nWarning: %d invalid image references were found and excluded.", totalInvalid)
+		logger.Info("   See *-invalid-images.txt files in each catalog directory for details.")
 	}
 
 	return nil

@@ -4,9 +4,9 @@ Quick reference for Release Team to manage rancher-assets releases.
 
 ## TL;DR
 
-- **Auto prereleases** happen on every merge to main (for changed chart majors)
+- **Auto prereleases** happen on every merge to main (for changed Rancher minors, with -dev suffix)
 - **Manual releases** give you full control via GitHub Actions UI
-- **Versions tracked** on orphan `versions` branch (not in main)
+- **Versions tracked** via Git tags with CalVer timestamps
 - **Git tags** trigger builds automatically
 
 ## Setup Requirements
@@ -44,12 +44,15 @@ The workflows require these GitHub secrets to be configured:
 ### View Current Versions
 
 ```bash
-git checkout versions
-cat versions.yaml
-git checkout main
-```
+# Latest stable for Rancher 2.14
+git tag -l "v2.14-*" --sort=-version:refname | grep -v -- '-dev$' | head -1
 
-Or via GitHub: https://github.com/rancher/rancher-assets/blob/versions/versions.yaml
+# Latest stable for Rancher 2.15
+git tag -l "v2.15-*" --sort=-version:refname | grep -v -- '-dev$' | head -1
+
+# All versions for Rancher 2.15
+git tag -l "v2.15-*" --sort=-version:refname
+```
 
 ### Trigger Manual Release
 
@@ -57,27 +60,24 @@ Or via GitHub: https://github.com/rancher/rancher-assets/blob/versions/versions.
 
 **Common Scenarios:**
 
-#### Release All Chart Majors (e.g., BCI security fix)
+#### Release All Rancher Minors (e.g., BCI security fix)
 ```
 commit_sha: [leave empty for HEAD]
-chart_major: [leave empty for ALL]
-bump_type: patch
+rancher_minor: [leave empty for ALL]
 release_type: prerelease  (or stable if validated)
 ```
 
-#### Release v1 Only (Rancher 2.15 releases)
+#### Release Rancher 2.15 Only
 ```
 commit_sha: [leave empty for HEAD]
-chart_major: v1
-bump_type: minor
+rancher_minor: 2.15
 release_type: stable
 ```
 
 #### Release from Specific Commit
 ```
 commit_sha: abc123def456
-chart_major: v0
-bump_type: patch
+rancher_minor: 2.14
 release_type: stable
 ```
 
@@ -85,29 +85,32 @@ release_type: stable
 
 ### Prerelease (default)
 - **When**: For testing, validation, RC builds
-- **Format**: `v1.2.3-rc.1`, `v1.2.3-rc.2`, etc.
+- **Format**: `v2.15-20260716T1430Z-dev` (with -dev suffix)
 - **Auto**: Happens on merge to main
 - **Manual**: Select "prerelease" in workflow
 
 ### Stable
 - **When**: Production-ready releases
-- **Format**: `v1.2.3` (clean semver)
+- **Format**: `v2.15-20260805T1600Z` (no -dev suffix)
 - **Auto**: Never (must be manual)
 - **Manual**: Select "stable" in workflow
 - **Effect**: Creates PR to rancher/rancher
 
-## Bump Types
+## Version Format
 
-### Patch
-- `v1.2.3` → `v1.2.4`
-- For bug fixes, CVE fixes, minor updates
-- Most common
+**CalVer with ISO 8601 Timestamp:**
 
-### Minor
-- `v1.2.3` → `v1.3.0`
-- For Rancher minor releases
-- Coordinated with Rancher release schedule
-- Each Rancher minor gets corresponding chart major minor bump
+`v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]`
+
+- **RANCHER_MINOR**: Rancher minor version (e.g., 2.14, 2.15)
+- **YYYYMMDD**: Date in UTC
+- **HHMM**: Time in UTC (24-hour)
+- **Z**: Zulu time (UTC timezone indicator)
+- **-dev**: Suffix for pre-releases
+
+**Examples:**
+- `v2.14-20260716T1430Z` - Stable release on July 16, 2026 at 14:30 UTC
+- `v2.15-20260805T1600Z-dev` - Pre-release on August 5, 2026 at 16:00 UTC
 
 ## Workflow Outputs
 
@@ -130,44 +133,37 @@ After triggering a manual release:
    - Automatic PR to rancher/rancher
    - Updates `build.yaml` with new version
 
-5. **Versions branch updated**
-   - `versions.yaml` reflects new versions
-   - Audit trail of releases
-
 ## Version Queries
 
-### Latest stable for v1
+### Latest stable for Rancher 2.15
 ```bash
-git checkout versions
-yq '.v1.stable.tag' versions.yaml
+git tag -l "v2.15-*" --sort=-version:refname | grep -v -- '-dev$' | head -1
 ```
 
-### Latest prerelease for v0
+### Latest prerelease for Rancher 2.14
 ```bash
-git checkout versions
-yq '.v0.prerelease.tag' versions.yaml
+git tag -l "v2.14-*" --sort=-version:refname | grep -- '-dev$' | head -1
 ```
 
-### When was v1 last released?
+### When was a version released?
 ```bash
-git checkout versions
-yq '.v1.stable.updated-at' versions.yaml
+git log -1 --format='%ai' v2.15-20260805T1600Z
 ```
 
-### All releases for v1
+### All releases for Rancher 2.15
 ```bash
-git tag -l "v1.*" --sort=-version:refname
+git tag -l "v2.15-*" --sort=-version:refname
 ```
 
 ## Decision Matrix
 
-| Situation | chart_major | bump_type | release_type |
-|-----------|-------------|-----------|--------------|
-| Rancher 2.15 releases | `v1` | `minor` | `stable` |
-| CVE fix affects all | `` (empty) | `patch` | `prerelease` → test → `stable` |
-| Bug fix in v0 only | `v0` | `patch` | `stable` |
-| Validate next minor | `v1` | `minor` | `prerelease` |
-| Emergency patch from specific commit | `v0` | `patch` | `stable` + `commit_sha` |
+| Situation | rancher_minor | release_type |
+|-----------|---------------|--------------|
+| Rancher 2.15 GA | `2.15` | `stable` |
+| CVE fix affects all | `` (empty) | `prerelease` → test → `stable` |
+| Bug fix in 2.14 only | `2.14` | `stable` |
+| Validate upcoming release | `2.15` | `prerelease` |
+| Emergency patch from specific commit | `2.14` | `stable` + `commit_sha` |
 
 ## Safety Features
 
@@ -194,26 +190,24 @@ git tag -l "v1.*" --sort=-version:refname
 
 ```
 1. Development work merges to main
-   → Auto prereleases (v1.3.0-rc.1, v1.3.0-rc.2, ...)
+   → Auto prereleases (v2.15-20260716T1430Z-dev, v2.15-20260717T0930Z-dev, ...)
 
 2. Rancher 2.15 release approaching
    → Manual workflow:
-     chart_major: v1
-     bump_type: minor
+     rancher_minor: 2.15
      release_type: prerelease
-   → Creates v1.3.0-rc.1 (if not already)
+   → Creates v2.15-20260801T1045Z-dev
 
 3. Validation in staging
-   → Test v1.3.0-rc.1
+   → Test v2.15-20260801T1045Z-dev
 
 4. Release Team approves
    → Manual workflow:
-     chart_major: v1
-     bump_type: minor
+     rancher_minor: 2.15
      release_type: stable
-   → Creates v1.3.0
+   → Creates v2.15-20260805T1600Z
    → PR to rancher/rancher
-   → Rancher 2.15 uses v1.3.0
+   → Rancher 2.15 uses v2.15-20260805T1600Z
 ```
 
 ### Emergency Security Fix
@@ -224,41 +218,39 @@ git tag -l "v1.*" --sort=-version:refname
 2. PR created to bump BCI version
    → Affects all Dockerfiles
 
-3. PR merges to main
+3. PR merges to main at 14:30 UTC
    → Auto prereleases:
-     v0.1.2-rc.1
-     v1.2.4-rc.1
+     v2.14-20260716T1430Z-dev
+     v2.15-20260716T1430Z-dev
 
 4. Quick validation of RC images
 
-5. Release Team promotes to stable
+5. Release Team promotes to stable at 16:00 UTC
    → Manual workflow:
-     chart_major: [empty] ← ALL
-     bump_type: patch
+     rancher_minor: [empty] ← ALL
      release_type: stable
      commit_sha: [the merge commit]
    → Creates:
-     v0.1.2
-     v1.2.4
+     v2.14-20260716T1600Z
+     v2.15-20260716T1600Z
    → PRs to rancher/rancher for both branches
 ```
 
-### Single Chart Major Patch
+### Single Rancher Minor Patch
 
 ```
-1. Bug found specific to v0 (Rancher 2.14)
+1. Bug found specific to Rancher 2.14
 
 2. Fix merged to main
-   → Auto prerelease: v0.1.3-rc.1
+   → Auto prerelease: v2.14-20260722T0915Z-dev
 
 3. Validation confirms fix
 
-4. Release Team releases v0 only
+4. Release Team releases Rancher 2.14 only
    → Manual workflow:
-     chart_major: v0
-     bump_type: patch
+     rancher_minor: 2.14
      release_type: stable
-   → Creates v0.1.3
+   → Creates v2.14-20260722T1100Z
    → PR to rancher/rancher (release/v2.14 branch)
 ```
 
@@ -301,9 +293,9 @@ git tag -l "v1.*" --sort=-version:refname
 - **Where**: Actions → Build and Release
 - **What**: Build progress, image push status
 
-### Verify Versions Branch
-- **Where**: https://github.com/rancher/rancher-assets/blob/versions/versions.yaml
-- **What**: Current stable and prerelease versions
+### Verify Release Tags
+- **Where**: Repository Tags tab, or `git tag -l`
+- **What**: All released versions (stable and prerelease)
 
 ### GitHub Releases
 - **Where**: Releases tab

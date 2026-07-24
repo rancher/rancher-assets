@@ -39,11 +39,11 @@ type TemplateData struct {
 // Generate creates TWO Dockerfiles for the specified Rancher minor version:
 // - Dockerfile.{minor} (prod/stable)
 // - Dockerfile.{minor}-dev (dev/prerelease)
-func Generate(cfg *config.Config, lock *lockfile.Lock, minor string, outputDir string) error {
+func Generate(cfg *config.Config, lock *lockfile.Lock, minor, outputDir string) error {
 	// Get chart version config
 	chartCfg, err := cfg.GetChartVersion(minor)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get chart version: %w", err)
 	}
 
 	// Extract Rancher version from rancher-branch (e.g., "release/v2.15" -> "2.15.x")
@@ -80,7 +80,7 @@ func Generate(cfg *config.Config, lock *lockfile.Lock, minor string, outputDir s
 	}
 
 	// Ensure output directory exists
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -111,7 +111,9 @@ func generateDockerfile(outputDir, minor, suffix string, data TemplateData, tmpl
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		err = file.Close()
+	}()
 
 	// Render template
 	if err := tmpl.Execute(file, data); err != nil {

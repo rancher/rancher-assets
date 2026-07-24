@@ -111,10 +111,10 @@ func TestParseCalVerTag(t *testing.T) {
 func TestPlanAutoPrerelease(t *testing.T) {
 	tests := []struct {
 		name           string
-		changedMinors  []string
-		wantCount      int
-		wantMinors     []string
 		wantReleaseTyp string
+		changedMinors  []string
+		wantMinors     []string
+		wantCount      int
 	}{
 		{
 			name:           "single changed minor",
@@ -148,6 +148,8 @@ func TestPlanAutoPrerelease(t *testing.T) {
 			if len(plans) != tt.wantCount {
 				t.Errorf("PlanAutoPrerelease() plan count = %v, want %v", len(plans), tt.wantCount)
 			}
+			// Compile regex once for all plans
+			versionPattern := regexp.MustCompile(`^v\d+\.\d+-\d{8}T\d{4}Z-dev$`)
 			for i, plan := range plans {
 				if plan.RancherMinor != tt.wantMinors[i] {
 					t.Errorf("Plan[%d] RancherMinor = %v, want %v", i, plan.RancherMinor, tt.wantMinors[i])
@@ -156,8 +158,7 @@ func TestPlanAutoPrerelease(t *testing.T) {
 					t.Errorf("Plan[%d] ReleaseType = %v, want %v", i, plan.ReleaseType, tt.wantReleaseTyp)
 				}
 				// Verify version format matches CalVer
-				matched, _ := regexp.MatchString(`^v\d+\.\d+-\d{8}T\d{4}Z-dev$`, plan.Version)
-				if !matched {
+				if !versionPattern.MatchString(plan.Version) {
 					t.Errorf("Plan[%d] Version = %v, does not match CalVer prerelease pattern", i, plan.Version)
 				}
 			}
@@ -168,10 +169,10 @@ func TestPlanAutoPrerelease(t *testing.T) {
 func TestPlanManualRelease(t *testing.T) {
 	tests := []struct {
 		name          string
-		rancherMinors []string
 		releaseType   string
-		wantCount     int
 		wantPattern   string
+		rancherMinors []string
+		wantCount     int
 		wantErr       bool
 	}{
 		{
@@ -222,7 +223,10 @@ func TestPlanManualRelease(t *testing.T) {
 				t.Errorf("PlanManualRelease() plan count = %v, want %v", len(plans), tt.wantCount)
 			}
 			for _, plan := range plans {
-				matched, _ := regexp.MatchString(tt.wantPattern, plan.Version)
+				matched, err := regexp.MatchString(tt.wantPattern, plan.Version)
+				if err != nil {
+					t.Fatalf("invalid regex pattern: %v", err)
+				}
 				if !matched {
 					t.Errorf("Plan Version = %v, does not match pattern %s", plan.Version, tt.wantPattern)
 				}

@@ -1,0 +1,148 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  default: none
+
+  enable:
+    # Core correctness
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+
+    # Simplicity
+    - gocritic
+
+    # Error handling
+    - errorlint
+    - nilerr
+    - nilnil
+    - wrapcheck
+
+    # Code quality
+    - revive
+    - unconvert
+    - unparam
+    - prealloc
+    - copyloopvar
+    - bodyclose
+    - contextcheck
+    - durationcheck
+    - exhaustive
+    - iface
+    - importas
+    - makezero
+    - misspell
+    - nakedret
+    - noctx
+    - reassign
+    - rowserrcheck
+    - sqlclosecheck
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+    - decorder
+
+    # Bugs
+    - asciicheck
+    - bidichk
+    - dogsled
+    - dupword
+    - errname
+    - forcetypeassert
+    - gocheckcompilerdirectives
+    - gochecksumtype
+    - loggercheck
+    - mirror
+    - perfsprint
+    - protogetter
+    - recvcheck
+    - sloglint
+    - spancheck
+    - testableexamples
+
+    # Complexity
+    - cyclop
+
+  settings:
+    cyclop:
+      max-complexity: 12
+      package-average: 8.0
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+
+    exhaustive:
+      default-signifies-exhaustive: true
+
+    govet:
+      enable-all: true
+
+    importas:
+      no-unaliased: true
+
+    misspell:
+      locale: US
+
+    nakedret:
+      max-func-lines: 20
+
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: var-naming
+        - name: receiver-naming
+        - name: indent-error-flow
+        - name: error-return
+        - name: error-naming
+        - name: unexported-return
+        - name: unnecessary-stmt
+        - name: empty-block
+        - name: superfluous-else
+        - name: modifies-value-receiver
+        - name: unreachable-code
+        - name: bool-literal-in-expr
+        - name: time-naming
+        - name: early-return
+
+    staticcheck:
+      checks:
+        - all
+
+    decorder:
+      disable-dec-order-check: false
+      disable-type-dec-num-check: false
+      disable-const-dec-num-check: false
+      disable-var-dec-num-check: false
+
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+
+  settings:
+    gofumpt:
+      extra-rules: true
+
+    goimports:
+      local-prefixes:
+        - github.com/yourorg
+
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/rancher/rancher-assets)
