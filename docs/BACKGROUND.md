@@ -4,7 +4,8 @@ This document explains the architecture and design decisions for the rancher-ass
 
 ## Problem Statement
 
-The `rancher-assets` image needs to bundle Helm charts from multiple upstream repositories for air-gapped Rancher deployments. Building this inside `rancher/rancher` would create a circular dependency problem:
+The `rancher-assets` image needs to bundle Helm charts from multiple upstream repositories for air-gapped Rancher deployments.
+Building this inside `rancher/rancher` would create a circular dependency problem:
 - Rancher would consume the charts image as a dependency
 - Rancher would also build the charts image
 - This chicken-and-egg problem would complicate versioning and releases
@@ -27,14 +28,14 @@ Inspired by `rancher/ci-image`, the system uses code generation instead of hand-
 - Consistent structure across all chart majors
 - Easy to add new chart majors (just update config.yaml)
 - Upstream branches and commits baked into generated files
-- Single source of truth (config.yaml) for all versions
+- Single source of truth (config.yaml) for all versions backed by lock file
 
 **How it works:**
-1. Static configuration in `config.yaml` defines chart versions and upstream branches
+1. Static configuration in `../config.yaml` defines chart versions and upstream branches
 2. Go generator queries upstream repos for latest commits
 3. Generator renders Dockerfile templates with pinned commits
 4. Generated Dockerfiles committed to git for transparency
-5. `lock.yaml` tracks dynamic state (commits, timestamps, script hash)
+5. `../lock.yaml` tracks dynamic state (commits, timestamps, script hash)
 
 ### Mono-Branch Strategy
 
@@ -51,24 +52,6 @@ The system uses a single `main` branch instead of release branches:
 - Must maintain backwards compatibility
 - Benefits outweigh costs for this use case (simple Docker image packaging)
 
-### Orphan Branch for Version Tracking
-
-Versions are tracked on an orphan `versions` branch instead of in code history:
-
-**Why:**
-- Version bumps don't clutter code history on main
-- Batch releases possible (multiple chart majors, one commit)
-- Clean audit trail (version history separate from code changes)
-- No workflow loops (version updates don't trigger rebuilds)
-
-**How it works:**
-- `versions` branch contains only `versions.yaml`
-- Workflows read current versions, bump them, create tags
-- Workflows update `versions` branch after tagging
-- `versions` branch never merges to main (orphan)
-
-See [VERSION.md](VERSION.md) for complete versioning strategy.
-
 ### Reproducible Builds
 
 The design ensures every build from the same git tag produces identical images, regardless of when built:
@@ -77,30 +60,30 @@ The design ensures every build from the same git tag produces identical images, 
 
 1. **Commit pinning:**
    - `make generate` queries upstream repos for branch head commits
-   - Commit SHAs stored in `lock.yaml`
+   - Commit SHAs stored in `../lock.yaml`
    - Commit SHAs baked into Dockerfiles as ARG defaults
    - Dockerfiles clone specific commits, not moving branch heads
 
 2. **Script hashing:**
-   - `package/copy-charts.sh` hash computed during generation
-   - Hash stored in `lock.yaml`
+   - `../package/copy-charts.sh` hash computed during generation
+   - Hash stored in `../lock.yaml`
    - Ensures script changes trigger new builds
 
 3. **Immutable lock file:**
-   - `lock.yaml` committed to git
+   - `../lock.yaml` committed to git
    - Checking out a tag gives you the exact lock state from that release
 
 **Example scenario:**
 ```bash
 # Build v1.0.0 today
 git checkout v1.0.0
-make build CHART_MAJOR=v1 VERSION=v1.0.0
+make build RANCHER_MINOR=v2.14 VERSION=v2.14-20260805T1600Z
 # Image digest: sha256:abc123...
 
 # Rebuild v1.0.0 6 months later
 # (upstream branches have moved, but commits are pinned in lock.yaml)
 git checkout v1.0.0
-make build CHART_MAJOR=v1 VERSION=v1.0.0
+make build RANCHER_MINOR=v2.14 VERSION=v2.14-20260805T1600Z
 # Image digest: sha256:abc123... (identical!)
 ```
 
@@ -108,49 +91,16 @@ make build CHART_MAJOR=v1 VERSION=v1.0.0
 
 The tag format determines which upstream refs are used:
 
-| Tag Format | Build Type | Upstream Refs Used | Use Case |
-|-----------|-----------|-------------------|----------|
-| `v1.0.0` | prod | `lock.yaml` → `upstream-refs.prod` | Stable releases |
-| `v1.0.0-rc.1` | dev | `lock.yaml` → `upstream-refs.dev` | Pre-releases, testing |
+| Tag Format                 | Build Type | Upstream Refs Used | Use Case |
+|----------------------------|-----------|-------------------|----------|
+| `v2.14-20260805T1600Z`     | prod | `../lock.yaml` → `upstream-refs.prod` | Stable releases |
+| `v2.14-20260805T1600Z-dev` | dev | `../lock.yaml` → `upstream-refs.dev` | Pre-releases, testing |
 
 **Why this matters:**
 - Production builds use stable upstream branches (`release-v2.15`)
 - Development builds use dev upstream branches (`dev-v2.15`)
 - Same codebase, different upstream refs
 - Build args override Dockerfile defaults for prod builds
-
-**Implementation:**
-```bash
-# Makefile detects build type from VERSION tag
-if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  BUILD_TYPE=prod
-  # Pass prod commits as build args
-else
-  BUILD_TYPE=dev
-  # Use Dockerfile defaults (dev commits)
-fi
-```
-
-### Chart Major Versioning
-
-Chart major versions align with Rancher minor versions:
-
-| Chart Major | Rancher Version | Rationale |
-|-------------|-----------------|-----------|
-| v0.x | 2.14.x | Charts for Rancher 2.14 |
-| v1.x | 2.15.x | Charts for Rancher 2.15 |
-| v2.x | 2.16.x | Charts for Rancher 2.16 (future) |
-
-**Why chart majors:**
-- Each Rancher minor has different chart requirements
-- Chart versions can evolve independently per Rancher version
-- Breaking changes scoped to chart major (Rancher minor)
-- Clear compatibility story (use v1.x charts with Rancher 2.15)
-
-**Why not Rancher version as image tag:**
-- Rancher 2.15 might have many chart releases (2.15.0, 2.15.1, etc.)
-- Chart releases decoupled from Rancher releases
-- Chart versioning independent of Rancher versioning
 
 ## Supply Chain Traceability
 
@@ -181,7 +131,7 @@ io.rancher.rke2.commit=${RKE2_COMMIT}         # RKE2 commit SHA
 
 **Inspecting labels:**
 ```bash
-docker inspect ghcr.io/rancher/rancher-assets:v1.0.0 | jq '.[0].Config.Labels'
+docker inspect ghcr.io/rancher/rancher-assets:v2.14-20260805T1600Z | jq '.[0].Config.Labels'
 ```
 
 ## Configuration Files
@@ -236,8 +186,8 @@ chart-versions:
 - Never edited manually
 
 **Why both files:**
-- `config.yaml` = intent (what branches to track)
-- `lock.yaml` = state (what commits are current)
+- `../config.yaml` = intent (what branches to track)
+- `../lock.yaml` = state (what commits are current)
 - Separation of concerns
 
 ## Init Container Pattern
@@ -271,25 +221,23 @@ initContainers:
 
 The system includes three GitHub Actions workflows to handle releases:
 
-### 1. auto-prerelease.yml
+### 1. auto-release.yml
 
-**Trigger:** Push to main when `lock.yaml` changes
+**Trigger:** Push to main when `dockerfiles/**` changes
 
-**Why lock.yaml:**
-- Source of truth for all build inputs
-- Upstream commit refs (what charts are bundled)
-- Package script hash (how charts are copied)
+**Why Dockerfiles:**
+- Each Dockerfile represents a specific Rancher minor and build type
+- Changes to Dockerfiles indicate new content to release
 - Generated by `make generate` which runs on config/package/upstream changes
 
 **What it does:**
-1. Detects which chart majors have upstream ref changes (ignores timestamps)
-2. Reads current versions from `versions` branch
-3. Auto-bumps prerelease versions (v1.0.0-rc.1 → v1.0.0-rc.2)
-4. Creates git tags on merge commit
-5. Updates `versions` branch
+1. Detects which specific Dockerfiles changed in the merge commit
+2. For each changed Dockerfile, generates a CalVer timestamp tag
+3. Creates git tags (with `-dev` suffix for dev builds, no suffix for prod)
+4. Pushes tags atomically to trigger builds
 
 **Change detection:**
-Uses Go tool (`go run main.go changed-majors --from=HEAD^ --to=HEAD`) to diff lock.yaml and output JSON array of changed majors.
+Uses shell script (`../.github/scripts/detect-changed-dockerfiles.sh`) to find modified Dockerfiles and parse their version info.
 
 ### 2. manual-release.yml
 
@@ -297,27 +245,28 @@ Uses Go tool (`go run main.go changed-majors --from=HEAD^ --to=HEAD`) to diff lo
 
 **Inputs:**
 - `commit_sha` - Commit to release (default: HEAD)
-- `chart_major` - Which chart major (empty = ALL)
-- `bump_type` - minor or patch
-- `release_type` - prerelease (default) or stable
+- `rancher_minor` - Which Rancher minor version (e.g., "2.15"; empty = ALL)
+- `build_type` - "prod" or "dev"
 
 **Use cases:**
-- Stable releases (Release Team promotion)
-- Batch releases (all chart majors from one commit)
-- Selective releases (only v1, only v0, etc.)
+- Prod releases (Release Team promotion)
+- Batch releases (all Rancher minors from one commit)
+- Selective releases (only 2.15, only 2.14, etc.)
+- Rebuild without Dockerfile changes (new timestamp)
 
-### 3. build-release.yml
+### 3. release.yml
 
 **Trigger:** Tag matching `v*` pattern
 
 **What it does:**
-1. Parses tag to determine version and build type
+1. Parses CalVer tag to determine Rancher minor and build type
 2. Builds multi-arch images (linux/amd64, linux/arm64)
-3. Pushes to Docker Hub
-4. Creates GitHub Release with metadata
-5. Creates PR to `rancher/rancher` (stable releases only)
+3. Pushes to GHCR
+4. Exports image lists from chart catalogs
+5. Creates GitHub Release with metadata and image lists
+6. Creates PR to `rancher/rancher` (prod releases only)
 
-See [VERSION.md](VERSION.md) for workflow details and [RELEASE-TEAM-GUIDE.md](RELEASE-TEAM-GUIDE.md) for operations.
+See [VERSION.md](../VERSION.md) for workflow details and [RELEASE-TEAM-GUIDE.md](RELEASE-TEAM-GUIDE.md) for operations.
 
 ## Fork-Friendly Design
 
@@ -391,21 +340,6 @@ docker buildx build --platform linux/amd64,linux/arm64 ...
 - Larger lock file
 - More complex structure
 - Clearer than separate files
-
-### Orphan Branch
-
-**Decision:** Use orphan branch instead of tags-only
-
-**Why:**
-- Version bumps don't clutter main history
-- Can batch multiple chart majors in one version update
-- Clean audit trail for versions
-- No workflow loops (version updates don't retrigger builds)
-
-**Trade-off:**
-- Two branches to manage (main + versions)
-- More complex than single-branch
-- Benefits outweigh complexity
 
 ## Design Priorities
 

@@ -103,11 +103,11 @@ make generate
 ```
 
 This will:
-1. Load `config.yaml`
+1. Load `../config.yaml`
 2. Query upstream repos for latest commits on configured branches
-3. Compute hash of `package/copy-charts.sh`
+3. Compute hash of `../package/copy-charts.sh`
 4. Generate `dockerfiles/Dockerfile.v0`, `dockerfiles/Dockerfile.v1`, etc.
-5. Update `lock.yaml` with upstream commits and script hash
+5. Update `../lock.yaml` with upstream commits and script hash
 
 ### 3. Review Changes
 
@@ -251,22 +251,7 @@ When Rancher 2.16 releases:
    # Creates dockerfiles/Dockerfile.v2
    ```
 
-3. **Update versions branch:**
-   ```bash
-   git checkout versions
-   
-   # Add v2 entry
-   yq eval '.v2.stable.tag = null' -i versions.yaml
-   yq eval '.v2.prerelease.tag = null' -i versions.yaml
-   
-   git add versions.yaml
-   git commit -m "Initialize v2 for Rancher 2.16"
-   git push origin versions
-   
-   git checkout main
-   ```
-
-4. **Commit and PR:**
+3. **Commit and PR:**
    ```bash
    git add config.yaml dockerfiles/ lock.yaml
    git commit -m "Add v2 chart major for Rancher 2.16"

@@ -9,9 +9,10 @@ This repository uses **CalVer (Calendar Versioning)** with **Rancher minor versi
 ### Rancher Minor Alignment
 
 | Rancher Minor | Version Prefix | Charts Branch (prod) | Charts Branch (dev) | Status |
-|---------------|----------------|---------------------|---------------------|---------|
-| 2.14.x        | v2.14-         | release-v2.14       | dev-v2.14          | Active  |
-| 2.15.x        | v2.15-         | release-v2.15       | dev-v2.15          | Active  |
+|---------------|----------------|----------------------|---------------------|---------|
+| 2.14.x        | v2.14-         | release-v2.14        | dev-v2.14           | Active  |
+| 2.15.x        | v2.15-         | release-v2.15        | dev-v2.15           | Active  |
+| 2.16.x        | v2.16-         | release-v2.16        | dev-v2.16           | Active  |
 
 **Note:** This table will grow as new Rancher minor versions are released. Each new Rancher minor (2.16, 2.17, etc.) gets a corresponding version prefix (v2.16-, v2.17-, etc.).
 
@@ -119,7 +120,7 @@ chart-versions:
         rke2: { branch: main, commit: d0865878..., fetched-at: ... }
 ```
 
-**The lock file does NOT track release versions.** Use the orphan `versions` branch for that.
+**The lock file does NOT track release versions.**
 
 ## Build Types
 

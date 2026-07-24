@@ -110,6 +110,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
@@ -117,30 +120,30 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Determine Dockerfile path
+        id: dockerfile
+        run: |
+          DOCKERFILE="dockerfiles/Dockerfile.${{ needs.parse-tag.outputs.rancher_minor }}"
+          if [ "${{ needs.parse-tag.outputs.build_type }}" = "dev" ]; then
+            DOCKERFILE="${DOCKERFILE}-dev"
+          fi
+          echo "path=$DOCKERFILE" >> $GITHUB_OUTPUT
+          echo "Building from: $DOCKERFILE"
+
       - name: Build and push to GHCR
-        uses: rancher/ecm-distro-tools/actions/publish-image@03cb52c4bd23670a192d47ef7b49d566928738d6 # v0.72.0
-        with:
-          image: ${{ env.REPO }}
-          tag: ${{ needs.parse-tag.outputs.version }}
-          platforms: linux/amd64,linux/arm64
-
-          push-to-public: true
-          public-registry: ghcr.io
-          public-repo: ${{ github.repository_owner }}
-          public-username: ${{ github.repository_owner }}
-          public-password: ${{ secrets.GITHUB_TOKEN }}
-
-          push-to-prime: false
-
-          make-target: push-image
+        run: |
+          ./.github/scripts/build-image.sh \
+            "${{ steps.dockerfile.outputs.path }}" \
+            "${{ needs.parse-tag.outputs.version }}" \
+            --push
         env:
           RANCHER_MINOR: ${{ needs.parse-tag.outputs.rancher_minor }}
-          VERSION: ${{ needs.parse-tag.outputs.version }}
           GIT_COMMIT: ${{ github.sha }}
           BUILD_DATE: ${{ github.event.head_commit.timestamp }}
           BUILD_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
           TARGET_PLATFORMS: linux/amd64,linux/arm64
-          IMAGE_REPO: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}
+          REGISTRY: ${{ env.REGISTRY }}
 
   export-image-lists:
     needs: [parse-tag, build-and-push]
@@ -161,10 +164,10 @@ jobs:
 
       - name: Generate image lists
         run: |
-          make export-images \
-            RANCHER_MINOR=${{ needs.parse-tag.outputs.rancher_minor }} \
-            VERSION=${{ needs.parse-tag.outputs.version }} \
-            IMAGE_REPO=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}
+          ./scripts/export-image-lists.sh \
+            --image "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.REPO }}:${{ needs.parse-tag.outputs.version }}" \
+            --version "${{ needs.parse-tag.outputs.version }}" \
+            --output-dir "dist/${{ needs.parse-tag.outputs.version }}"
 
       - name: Upload image lists as release assets
         run: |

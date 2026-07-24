@@ -59,7 +59,7 @@ make generate
 
 **Build a specific chart major:**
 ```bash
-make build CHART_MAJOR=v1 VERSION=v1.0.0-rc.1
+make build RANCHER_MINOR=v2.14 VERSION=v2.15-20260805T1600Z-dev
 ```
 
 **Build all chart majors (development versions):**
@@ -67,12 +67,12 @@ make build CHART_MAJOR=v1 VERSION=v1.0.0-rc.1
 make build-all
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and contribution guidelines.
+See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for development workflow and contribution guidelines.
 
 ## Documentation
 
-- [BACKGROUND.md](BACKGROUND.md) - Architecture, design decisions, technical context
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Development workflow, build system, testing
+- [BACKGROUND.md](docs/BACKGROUND.md) - Architecture, design decisions, technical context
+- [CONTRIBUTING.md](docs/CONTRIBUTING.md) - Development workflow, build system, testing
 - [VERSION.md](VERSION.md) - Versioning strategy, release workflows, version tracking
 
 ## License
