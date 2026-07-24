@@ -57,14 +57,18 @@ See [VERSION.md](VERSION.md) for complete versioning strategy and release workfl
 make generate
 ```
 
-**Build a specific chart major:**
+**Build a specific version:**
 ```bash
-make build RANCHER_MINOR=v2.14 VERSION=v2.15-20260805T1600Z-dev
+# Dev build (uses Dockerfile.{MINOR}-dev)
+make build-image TAG=v2.15-20260805T1600Z-dev RANCHER_MINOR=2.15 DEV=true
+
+# Prod build (uses Dockerfile.{MINOR})
+make build-image TAG=v2.14-20260805T1600Z RANCHER_MINOR=2.14
 ```
 
-**Build all chart majors (development versions):**
+**Push to registry:**
 ```bash
-make build-all
+make push-image TAG=v2.14-20260805T1600Z RANCHER_MINOR=2.14
 ```
 
 See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for development workflow and contribution guidelines.

@@ -23,18 +23,18 @@ If a script is used by GitHub Actions workflows, it belongs in `.github/scripts/
 - Generates Linux and Windows image lists for air-gapped deployments
 
 **`get-build-vars.sh`** - Extracts build variables for a version
-- Used by: Makefile
+- Used by: Makefile (legacy, may be deprecated)
 
 **`build-releases.sh`** - Batch builds multiple releases
 - Used by: Local development
+
+**`version`** - Version calculation and git utilities
+- Used by: Makefile for computing GIT_COMMIT and TARGET_BRANCH
 
 ### Development Utilities
 
 **`vendor-update.sh`** - Updates Go vendor dependencies
 - Used by: `make vendor-update`
-
-**`versions-helpers.sh`** - Version formatting utilities
-- Used by: `create-manual-release.sh`
 
 **`create-manual-release.sh`** - Creates manual release tags
 - Used by: `.github/workflows/manual-release.yml`
