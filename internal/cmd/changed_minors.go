@@ -1,0 +1,65 @@
+package cmd
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"sort"
+
+	"github.com/rancher/rancher-assets/internal/lockfile"
+	"github.com/rancher/rancher-assets/internal/logger"
+)
+
+func ChangedMinors(ctx context.Context, args []string) error {
+	// Parse flags
+	fs := flag.NewFlagSet("changed-minors", flag.ExitOnError)
+	fromCommit := fs.String("from", "", "From commit (required)")
+	toCommit := fs.String("to", "", "To commit (required)")
+	verbose := fs.Bool("verbose", false, "Show detailed change information")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if *fromCommit == "" || *toCommit == "" {
+		return errors.New("both --from and --to are required")
+	}
+
+	// Get changed Rancher minors
+	changed, err := lockfile.ChangedMajors(ctx, *fromCommit, *toCommit)
+	if err != nil {
+		return err
+	}
+
+	// Ensure we have an empty array instead of nil for JSON marshaling
+	if changed == nil {
+		changed = []string{}
+	}
+
+	// Sort for consistent output
+	sort.Strings(changed)
+
+	if *verbose {
+		// Verbose output - show what changed
+		if len(changed) == 0 {
+			logger.Info("No Rancher minors with upstream ref changes detected")
+			logger.Info("(Only timestamp changes in lock.yaml)")
+		} else {
+			logger.Info("Changed Rancher minors (%d):", len(changed))
+			for _, minor := range changed {
+				logger.Info("  - %s", minor)
+			}
+		}
+	}
+
+	// Always output JSON array (for workflow consumption)
+	output, err := json.Marshal(changed)
+	if err != nil {
+		return fmt.Errorf("failed to marshal output: %w", err)
+	}
+
+	logger.Println(string(output))
+	return nil
+}
