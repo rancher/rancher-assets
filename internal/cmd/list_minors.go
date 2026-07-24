@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/rancher-assets/internal/logger"
 )
 
+// ListMinors will print the Rancher minor versions found in the config
 func ListMinors(ctx context.Context, args []string) error {
 	// Load config
 	cfg, err := config.Load(configPath)

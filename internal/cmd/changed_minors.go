@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/rancher-assets/internal/logger"
 )
 
+// ChangedMinors will print the list of minor versions with changes
 func ChangedMinors(ctx context.Context, args []string) error {
 	// Parse flags
 	fs := flag.NewFlagSet("changed-minors", flag.ExitOnError)
@@ -20,7 +21,7 @@ func ChangedMinors(ctx context.Context, args []string) error {
 	verbose := fs.Bool("verbose", false, "Show detailed change information")
 
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("failed to parse command flags: %w", err)
 	}
 
 	if *fromCommit == "" || *toCommit == "" {
@@ -30,7 +31,7 @@ func ChangedMinors(ctx context.Context, args []string) error {
 	// Get changed Rancher minors
 	changed, err := lockfile.ChangedMajors(ctx, *fromCommit, *toCommit)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to identify changed versions from lock file: %w", err)
 	}
 
 	// Ensure we have an empty array instead of nil for JSON marshaling

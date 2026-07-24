@@ -1,3 +1,4 @@
+// Package main is the cli root command
 package main
 
 import (
@@ -37,16 +38,6 @@ func main() {
 			logger.Error("%v", err)
 			os.Exit(1)
 		}
-	case "calver-dev-version":
-		if err := cmd.CalverDevVersion(ctx, os.Args[2:]); err != nil {
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
-	case "plan-release":
-		if err := cmd.PlanRelease(ctx, os.Args[2:]); err != nil {
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
 	case "export-images":
 		if err := cmd.ExportImages(ctx, os.Args[2:]); err != nil {
 			logger.Error("%v", err)
@@ -68,12 +59,6 @@ func printUsage() {
 	logger.Println("  changed-minors       Detect Rancher minors with upstream ref changes")
 	logger.Println("                       Flags: --from=<commit> --to=<commit>")
 	logger.Println("  list-minors          List all Rancher minors from config.yaml")
-	logger.Println("  calver-dev-version   Generate CalVer dev version for a Rancher minor")
-	logger.Println("                       Flags: --minor=<rancher-minor>")
-	logger.Println("  plan-release         Plan CalVer versions for releases")
-	logger.Println("                       Flags: --type=<auto|manual>")
-	logger.Println("                              --changed-minors=<json> (for auto)")
-	logger.Println("                              --minors=<json> --release=<stable|prerelease> (for manual)")
 	logger.Println("  export-images        Generate image lists from chart catalogs")
 	logger.Println("                       Flags: --charts-path=<path> --version=<version> --output-dir=<path>")
 }

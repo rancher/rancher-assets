@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/rancher-assets/internal/logger"
 )
 
+// ExportImages will export a list of images for each chart repo
 func ExportImages(ctx context.Context, args []string) error {
 	// Parse flags
 	fs := flag.NewFlagSet("export-images", flag.ExitOnError)
@@ -18,7 +19,7 @@ func ExportImages(ctx context.Context, args []string) error {
 	outputDir := fs.String("output-dir", "", "Output directory for image lists (required)")
 
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("failed to parse command flags: %w", err)
 	}
 
 	if *chartsPath == "" || *version == "" || *outputDir == "" {

@@ -21,13 +21,14 @@ const (
 	devTemplatePath  = "internal/generator/tmpl/dev.tmpl"
 )
 
+// Generate renders new Dockerfile and optionally updates remote repo refs
 func Generate(ctx context.Context, args []string) error {
 	// Parse flags
 	fs := flag.NewFlagSet("generate", flag.ExitOnError)
 	update := fs.Bool("update", false, "Query upstream repos and update lock.yaml before generating")
 
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("failed to parse command flags: %w", err)
 	}
 
 	logger.Info("Loading configuration...")
@@ -96,7 +97,6 @@ func Generate(ctx context.Context, args []string) error {
 
 	// Update lock file with upstream refs if --update flag is set
 	if *update {
-
 		// Query upstream for each Rancher minor
 		for _, major := range majors {
 			logger.Info("\nProcessing Rancher minor: %s", major)
