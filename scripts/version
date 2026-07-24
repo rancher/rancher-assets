@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+
+COMMIT=$(git rev-parse --short HEAD)
+
+# ============================================================================
+# PRIMARY FLOW: CI builds (TAG set or git tag detected)
+# ============================================================================
+# CI either passes TAG explicitly or we detect it from git
+# CalVer format: v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]
+
+# Try explicit TAG first, then detect from git
+if [ -z "$TAG" ]; then
+    TAG=$(git tag -l --contains HEAD --sort=-v:refname | head -n 1 2>/dev/null)
+fi
+
+if [ -n "$TAG" ]; then
+    # CI flow: parse TAG to extract metadata
+    if [[ "$TAG" =~ ^v([0-9]+\.[0-9]+)-[0-9]{8}T[0-9]{4}Z(-dev)?$ ]]; then
+        RANCHER_MINOR="${BASH_REMATCH[1]}"
+        if [ "${BASH_REMATCH[2]}" = "-dev" ]; then
+            DEV="true"
+        else
+            DEV="false"
+        fi
+    else
+        # Malformed TAG - extract what we can
+        if [[ "$TAG" =~ ^v([0-9]+\.[0-9]+) ]]; then
+            RANCHER_MINOR="${BASH_REMATCH[1]}"
+        else
+            RANCHER_MINOR="0.0"
+        fi
+        DEV="unknown"
+    fi
+    VERSION="$TAG"
+
+# ============================================================================
+# FALLBACK FLOW: Local builds (no TAG, no git tag)
+# ============================================================================
+# Local builds require RANCHER_VERSION input and generate local dev tags
+else
+    # Check for dirty state
+    if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+        DIRTY="-dirty"
+    fi
+
+    # Require RANCHER_MINOR for local builds
+    if [ -z "$RANCHER_MINOR" ]; then
+        # No version provided - use fallback
+        RANCHER_MINOR="0.0"
+    fi
+
+    # Generate local dev tag
+    # Format: v{RANCHER_MINOR}-local{YYYYMMDD}T{HHMM}Z
+    TIMESTAMP=$(date -u +%Y%m%dT%H%MZ)
+    TAG="v${RANCHER_MINOR}-local${TIMESTAMP}"
+    VERSION="${COMMIT}${DIRTY}"
+    DEV="local"
+fi
+
+# ============================================================================
+# COMMON: Compute TARGET_BRANCH from config.yaml
+# ============================================================================
+if [ -z "$TARGET_BRANCH" ] && [ -n "$RANCHER_MINOR" ] && [ "$RANCHER_MINOR" != "0.0" ]; then
+    if command -v yq >/dev/null 2>&1 && [ -f config.yaml ]; then
+        TARGET_BRANCH=$(yq eval ".chart-versions.\"${RANCHER_MINOR}\".rancher-branch" config.yaml 2>/dev/null)
+        if [ "$TARGET_BRANCH" = "null" ] || [ -z "$TARGET_BRANCH" ]; then
+            TARGET_BRANCH="unknown"
+        fi
+    else
+        TARGET_BRANCH="unknown"
+    fi
+fi
+
+# Architecture detection
+ARCH=$TARGET_ARCH
+if [ -z "$ARCH" ]; then
+    ARCH=$(go env GOHOSTARCH)
+fi
+
+# Repository and image configuration
+REPO=${REPO:-rancher}
+IMAGE=${IMAGE:-"rancher-assets"}
+IMAGE_NAME=${IMAGE_NAME:-"${REPO}/${IMAGE}"}
+FULL_IMAGE=${FULL_IMAGE:-"${IMAGE_NAME}:${TAG}"}
+
+# Allow querying individual variables
+if [[ "$1" == "--short" && -n "$2" ]]; then
+  var_name="$2"
+  echo "${!var_name}"
+  exit 0
+fi
+
+# Print version information
+function print_version_debug() {
+    echo "TAG: $TAG"
+    echo "RANCHER_MINOR: $RANCHER_MINOR"
+    echo "DEV: $DEV"
+    echo "TARGET_BRANCH: $TARGET_BRANCH"
+    echo "VERSION: $VERSION"
+    echo "COMMIT: $COMMIT"
+    echo "DIRTY: $DIRTY"
+    echo "REPO: $REPO; IMAGE: $IMAGE"
+    echo "IMAGE_NAME: $IMAGE_NAME"
+    echo "FULL_IMAGE: $FULL_IMAGE"
+}
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then print_version_debug "$1"; fi

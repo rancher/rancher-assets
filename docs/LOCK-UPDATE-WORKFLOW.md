@@ -4,9 +4,9 @@ This document outlines the process for updating `../lock.yaml` and how different
 
 ## Overview
 
-The `../config.yaml` file is the **source of truth** for which upstream commits are bundled into each Rancher minor version.
-The file is backed by the `../lock.yaml` which helps track changes to the `../config.yaml` and to the state of the target branches in that config.
-When upstream repositories (charts, partner-charts, rke2-charts) get new commits, those changes must flow into rancher-assets via `../lock.yaml` updates.
+The `config.yaml` file is the **source of truth** for which upstream commits are bundled into each Rancher minor version.
+The file is backed by the `lock.yaml` which helps track changes to the `config.yaml` and to the state of the target branches in that config.
+When upstream repositories (charts, partner-charts, rke2-charts) get new commits, those changes must flow into rancher-assets via `lock.yaml` updates.
 
 ## Versioning: CalVer Format
 
@@ -32,9 +32,9 @@ This project uses **CalVer (Calendar Versioning)** with Rancher-minor aligned pr
 - **Manual lock.yaml regeneration** via `make generate`
 - **Manual release workflow** for Release Team (CalVer format)
 - **Tag-triggered builds** via `release.yml`
-- **Auto-release workflow** (`../.github/workflows/auto-release.yml`) - creates tags for changed Dockerfiles
-- **PR smoke testing** (`../.github/workflows/pr-smoke-test.yml`) - verifies Dockerfiles can build before merge
-- **Dockerfile-centric change detection** via shell scripts in `../.github/scripts`
+- **Auto-release workflow** (`.github/workflows/auto-release.yml`) - creates tags for changed Dockerfiles
+- **PR smoke testing** (`.github/workflows/pr-smoke-test.yml`) - verifies Dockerfiles can build before merge
+- **Dockerfile-centric change detection** via shell scripts in `.github/scripts`
 
 ### ⚠️ Not Yet Implemented
 
@@ -83,7 +83,7 @@ git commit -m "Update lock.yaml with latest upstream commits"
 3. Pushes all tags atomically
 4. Tags trigger build workflow (`../.github/workflows/release.yml`)
 
-**Status:** ✅ Implemented in `../.github/workflows/auto-release.yml`
+**Status:** ✅ Implemented in `.github/workflows/auto-release.yml`
 
 **Key Improvement**: This workflow is **Dockerfile-centric**, not lock.yaml-centric. It creates individual tags for each modified Dockerfile, enabling:
 - Independent release cadences for prod and dev variants
@@ -116,9 +116,8 @@ The repository uses a three-tier workflow system with both automatic and manual 
 **Purpose:** Catch build failures before merge
 
 **Scripts Used:**
-- `../.github/scripts/detect-changed-dockerfiles.sh` - Find modified Dockerfiles
-- `../.github/scripts/parse-dockerfile-name.sh` - Extract version info
-- `../.github/scripts/build-image.sh` - Build Docker image
+- `.github/scripts/detect-changed-dockerfiles.sh` - Find modified Dockerfiles
+- `.github/scripts/parse-dockerfile-name.sh` - Extract version info
 
 ### Tier 1a: Auto-Release Tagging (auto-release.yml)
 
@@ -141,10 +140,10 @@ If a commit changes both `Dockerfile.2.14` and `Dockerfile.2.14-dev`:
 - Pushes both tags → triggers two parallel release workflows
 
 **Scripts Used:**
-- `../.github/scripts/detect-changed-dockerfiles.sh` - Find modified Dockerfiles
-- `../.github/scripts/parse-dockerfile-name.sh` - Extract version info
-- `../.github/scripts/generate-calver-tag.sh` - Generate CalVer tag
-- `../.github/scripts/create-tag.sh` - Create annotated git tag
+- `.github/scripts/detect-changed-dockerfiles.sh` - Find modified Dockerfiles
+- `.github/scripts/parse-dockerfile-name.sh` - Extract version info
+- `.github/scripts/generate-calver-tag.sh` - Generate CalVer tag
+- `.github/scripts/create-tag.sh` - Create annotated git tag
 
 ### Tier 1b: Manual Release (manual-release.yml)
 
@@ -177,7 +176,7 @@ Manually release Rancher 2.14 prod:
 - Pushes tag → triggers release workflow
 
 **Scripts Used:**
-- `../.github/scripts/generate-calver-tag.sh` - Generate CalVer tag
+- `.github/scripts/generate-calver-tag.sh` - Generate CalVer tag
 
 ### Tier 2: Build and Release (release.yml)
 
@@ -185,14 +184,14 @@ Manually release Rancher 2.14 prod:
 
 **Process:**
 1. `parse-tag` job: Parse CalVer tag, create draft release
-2. `build-and-push` job: Build multi-platform image, push to GHCR
+2. `build-and-push` job: Build multi-platform image, push to registries
 3. `export-image-lists` job: Extract chart catalogs, upload as release assets
 4. `publish-release` job: Generate release notes, publish release
 5. `create-rancher-pr` job: Create PR to rancher/rancher (prod builds only)
 
 **Scripts Used:**
-- `../.github/scripts/build-image.sh` - Build and push Docker image
-- `../scripts/export-image-lists.sh` - Generate image lists (called from Makefile)
+- `make build-image` and `make push-image` - Build and push Docker image
+- `scripts/export-image-lists.sh` - Generate image lists (called from Makefile)
 
 **Dockerfile Selection:**
 - Tag without `-dev` suffix → `Dockerfile.{MINOR}` (prod)
@@ -263,10 +262,12 @@ Developers can use the CI scripts locally:
 
 ```bash
 # Build without pushing
-./.github/scripts/build-image.sh dockerfiles/Dockerfile.2.14 v2.14-test
+make build-image TAG=v2.14-test RANCHER_MINOR=2.14
+make build-image TAG=v2.14-test-dev RANCHER_MINOR=2.14 DEV=true
 
-# Build and push (requires GHCR login)
-./.github/scripts/build-image.sh dockerfiles/Dockerfile.2.14 v2.14-test --push
+# Build and push (requires registry login)
+make push-image TAG=v2.14-test RANCHER_MINOR=2.14
+make push-image TAG=v2.14-test-dev RANCHER_MINOR=2.14 DEV=true
 ```
 
 ### Detect Changed Dockerfiles
@@ -506,7 +507,7 @@ git commit -m "Bump BCI version to 16.1"
 
 ```yaml
 chart-versions:
-  "2.15":  # Rancher minor version
+  "2.15":  # Rancher minor version (quoted string)
     # Versions are NOT tracked in lock.yaml - CalVer generates timestamps at release time
     
     # Upstream commit refs ARE tracked

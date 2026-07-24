@@ -24,10 +24,6 @@ Scripts in this directory are the canonical implementations used by GitHub Actio
 
 ### Build & Release
 
-**`build-image.sh`** - Builds Docker images (with or without push)
-- Used by: `pr-smoke-test.yml`, `release.yml`
-- Can be called by Makefile if needed
-
 **`generate-release-notes.sh`** - Generates release notes from metadata
 - Used by: `release.yml`
 
@@ -40,7 +36,7 @@ If Makefile needs workflow functionality, call these scripts directly:
 
 ```makefile
 build:
-	@./.github/scripts/build-image.sh $(DOCKERFILE) $(VERSION)
+	@./.github/scripts/create-tag.sh $(DOCKERFILE) $(VERSION)
 ```
 
 ## Usage from Local Development
@@ -50,9 +46,6 @@ Developers can call these scripts directly for testing:
 ```bash
 # Detect changes
 ./.github/scripts/detect-changed-dockerfiles.sh origin/main HEAD
-
-# Build an image
-./.github/scripts/build-image.sh dockerfiles/Dockerfile.2.14 my-test-tag
 
 # Generate a tag
 ./.github/scripts/generate-calver-tag.sh 2.14 prod $(git rev-parse HEAD)

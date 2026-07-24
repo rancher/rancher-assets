@@ -95,13 +95,13 @@ While you can test image builds locally, the full workflow is designed for CI:
 
 ```bash
 # Local build test (single platform)
-make build RANCHER_MINOR=2.15 VERSION=v2.15-20260716T1430Z-dev
+make build-image TAG=v2.15-20260716T1430Z-dev RANCHER_MINOR=2.15 DEV=true
 
-# Build all minors with dev versions
-make build-all
+# Or for a prod build
+make build-image TAG=v2.15-20260716T1430Z RANCHER_MINOR=2.15 DEV=false
 ```
 
-**Note:** Multi-arch builds and registry pushes should happen in CI.
+**Note:** Multi-arch builds and registry pushes should happen in CI via `make push-image`.
 
 ---
 

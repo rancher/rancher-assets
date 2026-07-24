@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"text/template"
 
 	"github.com/rancher/rancher-assets/internal/config"
 	"github.com/rancher/rancher-assets/internal/lockfile"
@@ -85,12 +84,12 @@ func Generate(cfg *config.Config, lock *lockfile.Lock, minor, outputDir string) 
 	}
 
 	// Generate PROD Dockerfile
-	if err := generateDockerfile(outputDir, minor, "", data, DockerfileProdTemplate); err != nil {
+	if err := generateDockerfile(outputDir, minor, "", data, "prod.tmpl"); err != nil {
 		return fmt.Errorf("failed to generate prod Dockerfile: %w", err)
 	}
 
 	// Generate DEV Dockerfile
-	if err := generateDockerfile(outputDir, minor, "-dev", data, DockerfileDevTemplate); err != nil {
+	if err := generateDockerfile(outputDir, minor, "-dev", data, "dev.tmpl"); err != nil {
 		return fmt.Errorf("failed to generate dev Dockerfile: %w", err)
 	}
 
@@ -98,26 +97,14 @@ func Generate(cfg *config.Config, lock *lockfile.Lock, minor, outputDir string) 
 }
 
 // generateDockerfile renders a template to a file
-func generateDockerfile(outputDir, minor, suffix string, data TemplateData, tmplStr string) error {
-	// Parse template
-	tmpl, err := template.New("dockerfile").Parse(tmplStr)
-	if err != nil {
-		return fmt.Errorf("failed to parse Dockerfile template: %w", err)
-	}
+func generateDockerfile(outputDir, minor, suffix string, data TemplateData, tmplName string) error {
+	// Render template using embedded templates
+	content := ExecuteTemplate(tmplName, data)
 
 	// Create output file
 	outputPath := filepath.Join(outputDir, fmt.Sprintf("Dockerfile.%s%s", minor, suffix))
-	file, err := os.Create(outputPath)
-	if err != nil {
-		return fmt.Errorf("failed to create output file: %w", err)
-	}
-	defer func() {
-		err = file.Close()
-	}()
-
-	// Render template
-	if err := tmpl.Execute(file, data); err != nil {
-		return fmt.Errorf("failed to render Dockerfile template: %w", err)
+	if err := os.WriteFile(outputPath, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("failed to write Dockerfile: %w", err)
 	}
 
 	return nil

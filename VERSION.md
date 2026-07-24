@@ -108,7 +108,7 @@ The `lock.yaml` file on `main` branch tracks **upstream repository commits only*
 
 ```yaml
 chart-versions:
-  v0:
+  "2.14":
     upstream-refs:
       prod:  # Production upstream refs (release-v2.14 branches)
         charts: { branch: release-v2.14, commit: f408a794..., fetched-at: ... }
@@ -239,7 +239,7 @@ Result:
 
 ### 3. Build and Release (on tag)
 
-**Workflow:** `.github/workflows/build-release.yml`
+**Workflow:** `.github/workflows/release.yml`
 
 **Trigger:** Tag matching `v*` pattern
 
@@ -336,7 +336,7 @@ git show v2.15-20260805T1600Z:lock.yaml
 ## Repository Structure
 
 Each Rancher minor has:
-- **Dockerfile** - `dockerfiles/Dockerfile.v2.14`, `dockerfiles/Dockerfile.v2.15`, etc.
+- **Dockerfiles** - `dockerfiles/Dockerfile.2.14`, `dockerfiles/Dockerfile.2.14-dev`, etc.
 - **Config** - Entry in `config.yaml` defining branches
 - **Lock state** - Entry in `lock.yaml` tracking commits
 
@@ -346,22 +346,20 @@ Each Rancher minor has:
 
 ```bash
 # Prerelease build (uses dev refs from lock.yaml)
-make build RANCHER_MINOR=2.15 VERSION=v2.15-20260716T1430Z-dev
+make build-image TAG=v2.15-20260716T1430Z-dev RANCHER_MINOR=2.15 DEV=true
 
 # Stable build (uses prod refs from lock.yaml)
-make build RANCHER_MINOR=2.15 VERSION=v2.15-20260805T1600Z
+make build-image TAG=v2.15-20260805T1600Z RANCHER_MINOR=2.15
 ```
 
-### Building All Rancher Minors
+### Pushing to Registry
 
 ```bash
-# All dev builds with auto-generated CalVer versions
-make build-all
-# Produces: v2.14-20260716T1430Z-dev, v2.15-20260716T1430Z-dev, ...
+# Push a specific version
+make push-image TAG=v2.15-20260805T1600Z RANCHER_MINOR=2.15
 
-# Push all dev builds to registry
-make push-all
-# Same as build-all but pushes to registry
+# Dev build
+make push-image TAG=v2.15-20260716T1430Z-dev RANCHER_MINOR=2.15 DEV=true
 ```
 
 ### Fork Versioning
@@ -369,12 +367,12 @@ make push-all
 Forks can use the same CalVer scheme with their own registry:
 
 ```bash
-make push-all \
-  REGISTRY=ghcr.io \
-  ORG=myorg \
-  REPO=my-charts \
-  SOURCE_REPO=myorg/rancher-assets
-# Produces: ghcr.io/myorg/my-charts:v2.14-20260716T1430Z-dev
+make push-image \
+  TAG=v2.15-20260805T1600Z \
+  RANCHER_MINOR=2.15 \
+  REPO=myorg \
+  IMAGE=my-rancher-assets
+# Produces: myorg/my-rancher-assets:v2.15-20260805T1600Z
 ```
 
 ## Image Labels
