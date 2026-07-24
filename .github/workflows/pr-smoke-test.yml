@@ -99,6 +99,7 @@ jobs:
             "${{ matrix.dockerfile }}" \
             "${{ steps.tag.outputs.tag }}"
         env:
+          TARGET_PLATFORMS: linux/amd64  # Single platform for smoke test (--load doesn't support multi-arch)
           RANCHER_MINOR: ${{ steps.parse.outputs.rancher_minor }}
           GIT_COMMIT: ${{ github.sha }}
           BUILD_DATE: ${{ github.event.pull_request.updated_at }}
