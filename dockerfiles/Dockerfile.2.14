@@ -4,13 +4,6 @@
 # PROD Dockerfile - uses stable/release branches and commits
 
 ARG BCI_VERSION=16.0
-ARG VERSION=${VERSION}
-
-# Runtime labels - provided by build
-ARG GIT_COMMIT
-ARG BUILD_DATE
-ARG TARGET_BRANCH
-ARG BUILD_URL
 
 FROM registry.suse.com/bci/bci-base:${BCI_VERSION} AS builder
 RUN zypper refresh && zypper -n install git-core
@@ -64,6 +57,13 @@ ENV CHART_BRANCH=release-v2.14 \
     CHART_COMMIT=5781a718aa2c0f8535db2f45faafbd7692e17e80 \
     PARTNER_COMMIT=09064b05982bab905677c51539182c1a50727ac1 \
     RKE2_COMMIT=2f2d2a826d3ed3e41f085edf7a712d091c83a986
+
+# Runtime labels - provided by build
+ARG VERSION
+ARG GIT_COMMIT
+ARG BUILD_DATE
+ARG TARGET_BRANCH
+ARG BUILD_URL
 
 LABEL "io.artifacthub.package.logo-url"="https://raw.githubusercontent.com/rancher/ui/master/public/assets/images/logos/welcome-cow.svg" \
     "io.artifacthub.package.readme-url"="https://raw.githubusercontent.com/rancher/rancher/release/v2.6/README.md" \
