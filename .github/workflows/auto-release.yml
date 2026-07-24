@@ -18,13 +18,14 @@ on:
 
 permissions:
   contents: write  # Needed to create and push tags
+  id-token: write  # this is important, it's how we authenticate with Vault
 
 jobs:
   detect-and-tag:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0  # Need full history to detect changes
 
