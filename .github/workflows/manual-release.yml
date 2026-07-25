@@ -17,13 +17,14 @@ on:
         required: false
         type: string
       build_type:
-        description: 'Build type'
+        description: 'Build type (default both)'
         required: true
         type: choice
         options:
+          - both
           - dev
           - prod
-        default: 'dev'
+        default: 'both'
       commit_sha:
         description: 'Commit SHA to tag (leave empty for HEAD)'
         required: false
@@ -58,39 +59,6 @@ jobs:
 
           echo "minors=$MINORS" >> $GITHUB_OUTPUT
 
-      - name: Create tags
-        id: create
-        run: |
-          COMMIT_SHA=$(git rev-parse HEAD)
-          BUILD_TYPE="${{ inputs.build_type }}"
-
-          echo "Creating CalVer $BUILD_TYPE tags at commit $COMMIT_SHA"
-          echo ""
-
-          for MINOR in ${{ steps.minors.outputs.minors }}; do
-            echo "Processing Rancher $MINOR ($BUILD_TYPE)..."
-
-            # Generate CalVer tag
-            TAG=$(./.github/scripts/generate-calver-tag.sh \
-              "$MINOR" \
-              "$BUILD_TYPE" \
-              "$COMMIT_SHA")
-
-            echo "  Tag: $TAG"
-
-            # Determine Dockerfile for tag message
-            DOCKERFILE="dockerfiles/Dockerfile.${MINOR}"
-            if [ "$BUILD_TYPE" = "dev" ]; then
-              DOCKERFILE="${DOCKERFILE}-dev"
-            fi
-
-            # Create annotated tag with message
-            ./.github/scripts/create-tag.sh "$TAG" "$COMMIT_SHA" "$DOCKERFILE"
-
-            echo "  ✅ Created tag $TAG"
-            echo ""
-          done
-
       - name: "Read vault secrets"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         with:
@@ -115,6 +83,48 @@ jobs:
           git remote set-url origin "https://oauth2:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create tags
+        id: create
+        run: |
+          COMMIT_SHA=$(git rev-parse HEAD)
+          BUILD_TYPE="${{ inputs.build_type }}"
+
+          # Determine which build types to create
+          if [ "$BUILD_TYPE" = "both" ]; then
+            BUILD_TYPES="dev prod"
+            echo "Creating CalVer tags for BOTH dev and prod at commit $COMMIT_SHA"
+          else
+            BUILD_TYPES="$BUILD_TYPE"
+            echo "Creating CalVer $BUILD_TYPE tags at commit $COMMIT_SHA"
+          fi
+          echo ""
+
+          for MINOR in ${{ steps.minors.outputs.minors }}; do
+            for TYPE in $BUILD_TYPES; do
+              echo "Processing Rancher $MINOR ($TYPE)..."
+
+              # Generate CalVer tag
+              TAG=$(./.github/scripts/generate-calver-tag.sh \
+                "$MINOR" \
+                "$TYPE" \
+                "$COMMIT_SHA")
+
+              echo "  Tag: $TAG"
+
+              # Determine Dockerfile for tag message
+              DOCKERFILE="dockerfiles/Dockerfile.${MINOR}"
+              if [ "$TYPE" = "dev" ]; then
+                DOCKERFILE="${DOCKERFILE}-dev"
+              fi
+
+              # Create annotated tag with message
+              ./.github/scripts/create-tag.sh "$TAG" "$COMMIT_SHA" "$DOCKERFILE"
+
+              echo "  ✅ Created tag $TAG"
+              echo ""
+            done
+          done
 
       - name: Push all tags
         run: |
