@@ -256,12 +256,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: "Read vault secrets"
-        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
-        with:
-          secrets: |
-            secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials registry | PRIME_REGISTRY ;
-
       - name: Get Rancher target branch
         id: rancher
         run: |
@@ -272,7 +266,7 @@ jobs:
       - name: Create PR to rancher/rancher
         run: |
           VERSION="${{ needs.parse-tag.outputs.version }}"
-          IMAGE="${PRIME_REGISTRY}/rancher/rancher-assets:${VERSION}"
+          IMAGE="rancher/rancher-assets:${VERSION}"
 
           PR_BODY=$(.github/scripts/generate-rancher-pr-body.sh \
             "$VERSION" \
