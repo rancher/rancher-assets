@@ -46,36 +46,12 @@ else
     CALVER_DATE=$(date -u -r "$COMMIT_TIMESTAMP" '+%Y%m%dT%H%MZ')
 fi
 
-# Build base tag: v{RANCHER_MINOR}-{CALVER_DATE}[-dev]
-BASE_TAG="v${RANCHER_MINOR}-${CALVER_DATE}"
+# Build tag: v{RANCHER_MINOR}-{CALVER_DATE}[-dev]
+TAG="v${RANCHER_MINOR}-${CALVER_DATE}"
 
 # Append -dev suffix for dev builds
 if [ "$BUILD_TYPE" = "dev" ]; then
-    BASE_TAG="${BASE_TAG}-dev"
-fi
-
-# Check if base tag exists
-if ! git rev-parse "$BASE_TAG" >/dev/null 2>&1; then
-    # Base tag doesn't exist, use it
-    TAG="$BASE_TAG"
-else
-    # Base tag exists, find highest sequence number and increment
-    # Match pattern: BASE_TAG or BASE_TAG-N where N is a number
-    HIGHEST_SEQ=$(git tag -l "${BASE_TAG}*" | \
-        grep -E "^${BASE_TAG}(-[0-9]+)?$" | \
-        sed "s|^${BASE_TAG}-\{0,1\}||" | \
-        grep -E '^[0-9]+$' | \
-        sort -n | \
-        tail -1)
-
-    if [ -z "$HIGHEST_SEQ" ]; then
-        # No sequence tags found, start at 1
-        NEXT_SEQ=1
-    else
-        NEXT_SEQ=$((HIGHEST_SEQ + 1))
-    fi
-
-    TAG="${BASE_TAG}-${NEXT_SEQ}"
+    TAG="${TAG}-dev"
 fi
 
 # Output the tag

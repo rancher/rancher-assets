@@ -68,7 +68,8 @@ Pre-releases are:
 
 ⚠️ **Not SemVer compliant** - Irrelevant (no Helm chart, no parsers)  
 ⚠️ **Cannot target specific Rancher patch** - All `v2.14-*` work with any 2.14.x  
-⚠️ **All timestamps in UTC** - Z suffix indicates Zulu time (UTC+0)
+⚠️ **All timestamps in UTC** - Z suffix indicates Zulu time (UTC+0)  
+⚠️ **One tag per commit+minor+type** - Same commit cannot generate duplicate tags (see below)
 
 ## Version Tracking: Git Tags
 
@@ -80,6 +81,36 @@ Versions are tracked via **Git tags** pointing to commits on `main`. No separate
 ✅ **No noise on main** - Tags don't clutter code history  
 ✅ **Simple audit trail** - Git tags show release history  
 ✅ **No workflow loops** - Tag creation doesn't trigger rebuilds  
+
+### Tag Uniqueness Constraint
+
+**Important:** Each commit can only generate **one tag per Rancher minor and build type combination**.
+
+CalVer tags are derived from the commit timestamp, which is immutable. This means:
+
+✅ **Allowed**: Different minors from same commit
+- `v2.14-20260716T1430Z` + `v2.15-20260716T1430Z` ✓ (same commit, different minors)
+
+✅ **Allowed**: Same commit, different build types
+- `v2.14-20260716T1430Z` + `v2.14-20260716T1430Z-dev` ✓ (same minor, different types)
+
+❌ **Not Allowed**: Re-tagging same commit+minor+type
+- Cannot create `v2.14-20260716T1430Z` twice for the same commit
+
+**Implication for Rolling Dependencies:**
+
+If you need to pick up a rolling dependency update (e.g., latest BCI base image) without other code changes, you **must create a new commit**:
+
+```bash
+# This will fail if tag already exists for this commit
+git tag v2.14-20260716T1430Z abc123  # ❌ Error: tag already exists
+
+# Solution: Create a new commit (can be empty)
+git commit --allow-empty -m "Rebuild to pick up latest BCI security patches"
+# New commit gets new timestamp → new tag possible
+```
+
+**Alternative:** Pin all dependencies to specific versions (remove rolling refs) so every meaningful change requires a code/config commit.
 
 ### Querying Versions
 
