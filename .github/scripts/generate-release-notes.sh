@@ -114,9 +114,16 @@ if [ "$DRAFT" = "false" ]; then
 
 ### Air-Gapped Deployment
 
-Image lists and helper scripts for air-gapped deployments are available as release assets below:
-- \`rancher-charts-images.txt\` - Linux container images
-- \`rancher-charts-windows-images.txt\` - Windows container images
-- Helper scripts for save/load/mirror operations
+Image lists and helper scripts for air-gapped deployments are available as release assets below.
+The lists are grouped by the ClusterRepo they come from:
+- Rancher Charts:
+  - \`rancher-charts-images.txt\` - Linux container images
+  - \`rancher-charts-windows-images.txt\` - Windows container images
+- Partner Charts:
+  - \`rancher-partner-charts-images.txt\` - Linux container images
+  - \`rancher-partner-charts-windows-images.txt\` - Windows container images
+- RKE2 Charts:
+  - \`rancher-rke2-charts-images.txt\` - Linux container images
+- The other lists are for Dev use helpful for debugging chart content issues.
 EOF
 fi
