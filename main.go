@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,6 +18,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := run(); err != nil {
+		logger.Error("%v", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -25,29 +33,26 @@ func main() {
 	switch command {
 	case "generate":
 		if err := cmd.Generate(ctx, os.Args[2:]); err != nil {
-			logger.Error("%v", err)
-			os.Exit(1)
+			return fmt.Errorf("generate: %w", err)
 		}
 	case "changed-minors":
 		if err := cmd.ChangedMinors(ctx, os.Args[2:]); err != nil {
-			logger.Error("%v", err)
-			os.Exit(1)
+			return fmt.Errorf("changed-minors: %w", err)
 		}
 	case "list-minors":
 		if err := cmd.ListMinors(ctx, os.Args[2:]); err != nil {
-			logger.Error("%v", err)
-			os.Exit(1)
+			return fmt.Errorf("list-minors: %w", err)
 		}
 	case "export-images":
 		if err := cmd.ExportImages(ctx, os.Args[2:]); err != nil {
-			logger.Error("%v", err)
-			os.Exit(1)
+			return fmt.Errorf("export-images: %w", err)
 		}
 	default:
-		logger.Error("Unknown command: %s", command)
 		printUsage()
-		os.Exit(1)
+		return fmt.Errorf("unknown command: %s", command)
 	}
+
+	return nil
 }
 
 func printUsage() {

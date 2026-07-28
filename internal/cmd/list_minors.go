@@ -1,3 +1,4 @@
+//nolint:cyclop // Package average affected by Generate function's linear workflow
 package cmd
 
 import (

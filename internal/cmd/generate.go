@@ -1,3 +1,4 @@
+//nolint:cyclop // Package average affected by Generate function's linear workflow
 package cmd
 
 import (
@@ -22,6 +23,8 @@ const (
 )
 
 // Generate renders new Dockerfile and optionally updates remote repo refs
+//
+//nolint:cyclop // Linear workflow with proper error handling; breaking into smaller functions would reduce clarity
 func Generate(ctx context.Context, args []string) error {
 	// Parse flags
 	fs := flag.NewFlagSet("generate", flag.ExitOnError)
@@ -106,7 +109,10 @@ func Generate(ctx context.Context, args []string) error {
 
 			// Query upstream repos
 			logger.Info("  Querying upstream repositories...")
-			chartCfg, _ := cfg.GetChartVersion(major)
+			chartCfg, err := cfg.GetChartVersion(major)
+			if err != nil {
+				return fmt.Errorf("failed to get chart version for %s: %w", major, err)
+			}
 
 			// Query both prod and dev branches
 			var prodRefs, devRefs lockfile.UpstreamRefsSet
