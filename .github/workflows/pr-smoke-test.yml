@@ -68,7 +68,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false  # Test all Dockerfiles even if one fails
-      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+        dockerfile: ${{ fromJson(needs.detect-changes.outputs.matrix).dockerfile }}
 
     steps:
       - name: Checkout repository
@@ -99,7 +101,7 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
           RANCHER_MINOR: ${{ steps.parse.outputs.rancher_minor }}
           DEV: ${{ steps.parse.outputs.build_type == 'dev' }}
-          TARGET_PLATFORMS: linux/amd64  # Single platform for smoke test (--load doesn't support multi-arch)
+          TARGET_PLATFORMS: ${{ matrix.platform }} # Single platform (at a time) for smoke test (--load doesn't support multi-arch)
           GIT_COMMIT: ${{ github.sha }}
           BUILD_DATE: ${{ github.event.pull_request.updated_at }}
           BUILD_URL: ${{ github.server_url }}/${{ github.repository }}/pull/${{ github.event.pull_request.number }}
@@ -107,6 +109,7 @@ jobs:
       - name: Report success
         run: |
           echo "✅ Successfully built ${{ matrix.dockerfile }}" >> $GITHUB_STEP_SUMMARY
+          echo "   Platform: ${{ matrix.platform }}" >> $GITHUB_STEP_SUMMARY
           echo "   Tag: ${{ steps.tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
           echo "   Rancher Minor: ${{ steps.parse.outputs.rancher_minor }}" >> $GITHUB_STEP_SUMMARY
           echo "   Build Type: ${{ steps.parse.outputs.build_type }}" >> $GITHUB_STEP_SUMMARY
