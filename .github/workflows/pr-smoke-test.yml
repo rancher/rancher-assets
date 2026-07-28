@@ -120,7 +120,7 @@ jobs:
       - name: Check smoke test results
         run: |
           if [ "${{ needs.smoke-test.result }}" = "success" ]; then
-            // Noop
+            echo "Success"
           elif [ "${{ needs.smoke-test.result }}" = "skipped" ]; then
             echo "## PR Smoke Test Results" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
