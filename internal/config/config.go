@@ -26,13 +26,13 @@ type ChartVersionConfig struct {
 type BuildConfig struct {
 	ChartsBranch  string `yaml:"charts-branch"`
 	PartnerBranch string `yaml:"partner-branch"`
-	Rke2Branch    string `yaml:"rke2-branch"`
+	RKE2Branch    string `yaml:"rke2-branch"`
 }
 
 // BaseImageConfig defines base image versions
 type BaseImageConfig struct {
-	BciBaseVersion  string `yaml:"bci-base"`
-	BciMicroVersion string `yaml:"bci-micro"`
+	BCIBaseVersion  string `yaml:"bci-base"`
+	BCIMicroVersion string `yaml:"bci-micro"`
 }
 
 // ClusterRepoConfig defines an upstream repository with its URL and catalog path
@@ -82,7 +82,7 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.BaseImage.BciBaseVersion == "" || c.BaseImage.BciMicroVersion == "" {
+	if c.BaseImage.BCIBaseVersion == "" || c.BaseImage.BCIMicroVersion == "" {
 		return errors.New("base-image.bci-base & base-image.bci-micro are both required")
 	}
 
@@ -121,7 +121,7 @@ func validateBuildConfig(major, buildType string, cfg BuildConfig) error {
 	if cfg.PartnerBranch == "" {
 		return fmt.Errorf("chart version %s: %s.partner-branch is required", major, buildType)
 	}
-	if cfg.Rke2Branch == "" {
+	if cfg.RKE2Branch == "" {
 		return fmt.Errorf("chart version %s: %s.rke2-branch is required", major, buildType)
 	}
 	return nil

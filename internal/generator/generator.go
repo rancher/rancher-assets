@@ -57,8 +57,8 @@ func Generate(cfg *config.Config, lock *lockfile.Lock, minor, outputDir string) 
 
 	// Prepare template data with BOTH dev and prod configurations
 	data := TemplateData{
-		BciBaseVersion:  cfg.BaseImage.BciBaseVersion,
-		BciMicroVersion: cfg.BaseImage.BciMicroVersion,
+		BciBaseVersion:  cfg.BaseImage.BCIBaseVersion,
+		BciMicroVersion: cfg.BaseImage.BCIMicroVersion,
 		RancherMinor:    minor,
 		RancherVersion:  rancherVersion,
 		ClusterRepos:    cfg.ClusterRepos,
@@ -68,16 +68,16 @@ func Generate(cfg *config.Config, lock *lockfile.Lock, minor, outputDir string) 
 		DevChartCommit:   chartLock.UpstreamRefs.Dev.Charts.Commit,
 		DevPartnerBranch: chartCfg.Dev.PartnerBranch,
 		DevPartnerCommit: chartLock.UpstreamRefs.Dev.Partner.Commit,
-		DevRke2Branch:    chartCfg.Dev.Rke2Branch,
-		DevRke2Commit:    chartLock.UpstreamRefs.Dev.Rke2.Commit,
+		DevRke2Branch:    chartCfg.Dev.RKE2Branch,
+		DevRke2Commit:    chartLock.UpstreamRefs.Dev.RKE2.Commit,
 
 		// Prod configuration
 		ProdChartsBranch:  chartCfg.Prod.ChartsBranch,
 		ProdChartCommit:   chartLock.UpstreamRefs.Prod.Charts.Commit,
 		ProdPartnerBranch: chartCfg.Prod.PartnerBranch,
 		ProdPartnerCommit: chartLock.UpstreamRefs.Prod.Partner.Commit,
-		ProdRke2Branch:    chartCfg.Prod.Rke2Branch,
-		ProdRke2Commit:    chartLock.UpstreamRefs.Prod.Rke2.Commit,
+		ProdRke2Branch:    chartCfg.Prod.RKE2Branch,
+		ProdRke2Commit:    chartLock.UpstreamRefs.Prod.RKE2.Commit,
 	}
 
 	// Ensure output directory exists

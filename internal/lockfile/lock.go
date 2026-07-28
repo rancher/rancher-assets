@@ -20,8 +20,8 @@ type Lock struct {
 
 // BaseImageLock tracks base image versions used for Dockerfile generation
 type BaseImageLock struct {
-	BciBase  string `yaml:"bci-base"`
-	BciMicro string `yaml:"bci-micro"`
+	BCIBase  string `yaml:"bci-base"`
+	BCIMicro string `yaml:"bci-micro"`
 }
 
 // TemplateHashes tracks hashes of template files for reproducibility
@@ -48,7 +48,7 @@ type UpstreamRefsByBuild struct {
 type UpstreamRefsSet struct {
 	Charts  UpstreamRef `yaml:"charts"`
 	Partner UpstreamRef `yaml:"partner"`
-	Rke2    UpstreamRef `yaml:"rke2"`
+	RKE2    UpstreamRef `yaml:"rke2"`
 }
 
 // UpstreamRef tracks an upstream repository reference

@@ -68,7 +68,7 @@ func refSetChanged(from, to UpstreamRefsSet) bool {
 	if from.Partner.Commit != to.Partner.Commit {
 		return true
 	}
-	if from.Rke2.Commit != to.Rke2.Commit {
+	if from.RKE2.Commit != to.RKE2.Commit {
 		return true
 	}
 	return false

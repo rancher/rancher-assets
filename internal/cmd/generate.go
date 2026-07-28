@@ -92,12 +92,12 @@ func Generate(ctx context.Context, args []string) error {
 	}
 
 	// Check if base-image values changed
-	if lock.BaseImage.BciBase != cfg.BaseImage.BciBaseVersion {
-		lock.BaseImage.BciBase = cfg.BaseImage.BciBaseVersion
+	if lock.BaseImage.BCIBase != cfg.BaseImage.BCIBaseVersion {
+		lock.BaseImage.BCIBase = cfg.BaseImage.BCIBaseVersion
 		lockChanged = true
 	}
-	if lock.BaseImage.BciMicro != cfg.BaseImage.BciMicroVersion {
-		lock.BaseImage.BciMicro = cfg.BaseImage.BciMicroVersion
+	if lock.BaseImage.BCIMicro != cfg.BaseImage.BCIMicroVersion {
+		lock.BaseImage.BCIMicro = cfg.BaseImage.BCIMicroVersion
 		lockChanged = true
 	}
 
@@ -134,14 +134,14 @@ func Generate(ctx context.Context, args []string) error {
 			logger.CompleteProgress("%s", partnerRef.Commit[:8])
 			prodRefs.Partner = partnerRef
 
-			logger.StartProgress("      - rke2 @ %s: ", chartCfg.Prod.Rke2Branch)
-			rke2Ref, err := lockfile.QueryUpstreamRef(ctx, cfg.ClusterRepos["rke2"].URL, chartCfg.Prod.Rke2Branch)
+			logger.StartProgress("      - rke2 @ %s: ", chartCfg.Prod.RKE2Branch)
+			rke2Ref, err := lockfile.QueryUpstreamRef(ctx, cfg.ClusterRepos["rke2"].URL, chartCfg.Prod.RKE2Branch)
 			if err != nil {
 				logger.CompleteProgress("FAILED (%v)", err)
 				return fmt.Errorf("failed to query rke2 upstream: %w", err)
 			}
 			logger.CompleteProgress("%s", rke2Ref.Commit[:8])
-			prodRefs.Rke2 = rke2Ref
+			prodRefs.RKE2 = rke2Ref
 
 			// Query DEV branches
 			logger.Info("    [dev]")
@@ -163,14 +163,14 @@ func Generate(ctx context.Context, args []string) error {
 			logger.CompleteProgress("%s", partnerRef.Commit[:8])
 			devRefs.Partner = partnerRef
 
-			logger.StartProgress("      - rke2 @ %s: ", chartCfg.Dev.Rke2Branch)
-			rke2Ref, err = lockfile.QueryUpstreamRef(ctx, cfg.ClusterRepos["rke2"].URL, chartCfg.Dev.Rke2Branch)
+			logger.StartProgress("      - rke2 @ %s: ", chartCfg.Dev.RKE2Branch)
+			rke2Ref, err = lockfile.QueryUpstreamRef(ctx, cfg.ClusterRepos["rke2"].URL, chartCfg.Dev.RKE2Branch)
 			if err != nil {
 				logger.CompleteProgress("FAILED (%v)", err)
 				return fmt.Errorf("failed to query rke2 upstream: %w", err)
 			}
 			logger.CompleteProgress("%s", rke2Ref.Commit[:8])
-			devRefs.Rke2 = rke2Ref
+			devRefs.RKE2 = rke2Ref
 
 			// Update lock file with both prod and dev refs
 			if err := lock.UpdateUpstreamRefs(major, prodRefs, devRefs); err != nil {
