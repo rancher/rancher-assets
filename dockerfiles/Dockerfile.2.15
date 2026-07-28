@@ -3,9 +3,7 @@
 #
 # PROD Dockerfile - uses stable/release branches and commits
 
-ARG BCI_VERSION=16.0
-
-FROM registry.suse.com/bci/bci-base:${BCI_VERSION} AS builder
+FROM registry.suse.com/bci/bci-base:16.0@sha256:c121aa8f01348b602e5b29b3e868693de3917cc15ab4735fcbd013ea159c426f AS builder
 RUN zypper refresh && zypper -n install git-core
 
 # Clone rancher-charts repository (PROD)
@@ -39,7 +37,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git checkout FETCH_HEAD
 
 # Consolidated charts image
-FROM registry.suse.com/bci/bci-micro:${BCI_VERSION}
+FROM registry.suse.com/bci/bci-micro:16.0@sha256:0a1b2222f55d4505ff50b9355a1877b07b5e442d7fd6efdc44b907cb0dd9572d
 
 # Copy chart repositories
 COPY --from=rancher-charts /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721 /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721

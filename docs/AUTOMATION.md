@@ -1,5 +1,11 @@
 # Automation Items
 
+## Renovate/UpdateCLI
+
+The `config.yaml` file `base-image.bci-base` and `base-image.bci-micro` should be auto updated via automation tooling.
+
+## Release workflow
+
 Add back to release.yml and complete workflow once ready to automate.
 
 TODO:

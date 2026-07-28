@@ -11,10 +11,17 @@ import (
 // Lock represents the complete lock file state
 type Lock struct {
 	ChartVersions    map[string]ChartVersionLock `yaml:"chart-versions"`
+	BaseImage        BaseImageLock               `yaml:"base-image"`
 	CopyScriptHash   string                      `yaml:"copy-script-hash"`
 	TemplateHashes   TemplateHashes              `yaml:"template-hashes"`
 	GeneratedAt      *time.Time                  `yaml:"generated-at"`
 	GeneratorVersion string                      `yaml:"generator-version"`
+}
+
+// BaseImageLock tracks base image versions used for Dockerfile generation
+type BaseImageLock struct {
+	BciBase  string `yaml:"bci-base"`
+	BciMicro string `yaml:"bci-micro"`
 }
 
 // TemplateHashes tracks hashes of template files for reproducibility

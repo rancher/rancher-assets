@@ -98,6 +98,16 @@ func Generate(ctx context.Context, args []string) error {
 		lockChanged = true
 	}
 
+	// Check if base-image values changed
+	if lock.BaseImage.BciBase != cfg.BaseImage.BciBaseVersion {
+		lock.BaseImage.BciBase = cfg.BaseImage.BciBaseVersion
+		lockChanged = true
+	}
+	if lock.BaseImage.BciMicro != cfg.BaseImage.BciMicroVersion {
+		lock.BaseImage.BciMicro = cfg.BaseImage.BciMicroVersion
+		lockChanged = true
+	}
+
 	// Update lock file with upstream refs if --update flag is set
 	if *update {
 		// Query upstream for each Rancher minor

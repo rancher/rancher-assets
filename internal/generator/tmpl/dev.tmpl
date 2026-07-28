@@ -3,9 +3,7 @@
 #
 # DEV Dockerfile - uses dev branches and commits
 
-ARG BCI_VERSION={{.BciVersion}}
-
-FROM registry.suse.com/bci/bci-base:${BCI_VERSION} AS builder
+FROM registry.suse.com/bci/bci-base:{{.BciBaseVersion}} AS builder
 RUN zypper refresh && zypper -n install git-core
 
 # Clone rancher-charts repository (DEV)
@@ -39,7 +37,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git checkout FETCH_HEAD
 
 # Consolidated charts image
-FROM registry.suse.com/bci/bci-micro:${BCI_VERSION}
+FROM registry.suse.com/bci/bci-micro:{{.BciMicroVersion}}
 
 # Copy chart repositories
 COPY --from=rancher-charts {{(index .ClusterRepos "charts").Path}} {{(index .ClusterRepos "charts").Path}}

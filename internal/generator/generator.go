@@ -11,8 +11,9 @@ import (
 
 // TemplateData holds the data for Dockerfile template rendering
 type TemplateData struct {
-	BciVersion   string
-	RancherMinor string
+	BciBaseVersion  string
+	BciMicroVersion string
+	RancherMinor    string
 
 	// Dev configuration
 	DevChartsBranch  string
@@ -56,10 +57,11 @@ func Generate(cfg *config.Config, lock *lockfile.Lock, minor, outputDir string) 
 
 	// Prepare template data with BOTH dev and prod configurations
 	data := TemplateData{
-		BciVersion:     cfg.BaseImage.BciVersion,
-		RancherMinor:   minor,
-		RancherVersion: rancherVersion,
-		ClusterRepos:   cfg.ClusterRepos,
+		BciBaseVersion:  cfg.BaseImage.BciBaseVersion,
+		BciMicroVersion: cfg.BaseImage.BciMicroVersion,
+		RancherMinor:    minor,
+		RancherVersion:  rancherVersion,
+		ClusterRepos:    cfg.ClusterRepos,
 
 		// Dev configuration
 		DevChartsBranch:  chartCfg.Dev.ChartsBranch,

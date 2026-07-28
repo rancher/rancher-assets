@@ -31,7 +31,8 @@ type BuildConfig struct {
 
 // BaseImageConfig defines base image versions
 type BaseImageConfig struct {
-	BciVersion string `yaml:"bci-version"`
+	BciBaseVersion  string `yaml:"bci-base"`
+	BciMicroVersion string `yaml:"bci-micro"`
 }
 
 // ClusterRepoConfig defines an upstream repository with its URL and catalog path
@@ -81,8 +82,8 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.BaseImage.BciVersion == "" {
-		return errors.New("base-image.bci-version is required")
+	if c.BaseImage.BciBaseVersion == "" || c.BaseImage.BciMicroVersion == "" {
+		return errors.New("base-image.bci-base & base-image.bci-micro are both required")
 	}
 
 	// Validate cluster repos
