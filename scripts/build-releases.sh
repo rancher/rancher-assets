@@ -40,17 +40,17 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-echo "⚠️  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "⚠️  LOCAL DEBUG BUILD - NOT FOR PRODUCTION RELEASES"
-echo "⚠️  Use GitHub Actions workflows for real releases"
-echo "⚠️  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "LOCAL DEBUG BUILD - NOT FOR PRODUCTION RELEASES"
+echo "Use GitHub Actions workflows for real releases"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "Building all Rancher minors with CalVer dev versions..."
 echo ""
 
 RANCHER_MINORS=$(yq eval '.chart-versions | keys | .[]' config.yaml)
 if [ -z "$RANCHER_MINORS" ]; then
-    echo "❌ Error: No Rancher minors found in config.yaml"
+    echo "Error: No Rancher minors found in config.yaml"
     exit 1
 fi
 
@@ -58,7 +58,6 @@ BUILT_COUNT=0
 VERSIONS_BUILT=()
 
 for minor in $RANCHER_MINORS; do
-    # Generate CalVer dev version for this minor
     VERSION=$(go run main.go calver-dev-version --minor="$minor")
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -67,7 +66,7 @@ for minor in $RANCHER_MINORS; do
 
     make build RANCHER_MINOR="$minor" VERSION="$VERSION"
     if [ $? -ne 0 ]; then
-        echo "❌ Build failed for Rancher $minor"
+        echo "Build failed for Rancher $minor"
         exit 1
     fi
 
@@ -77,16 +76,15 @@ for minor in $RANCHER_MINORS; do
 done
 
 if [ $BUILT_COUNT -eq 0 ]; then
-    echo "⚠️  No releases built"
+    echo "No releases built"
     exit 1
 fi
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✅ Built $BUILT_COUNT release(s) - LOCAL DEBUG ONLY"
-echo "⚠️  Remember: Use GitHub Actions for production releases"
+echo "Built $BUILT_COUNT release(s) - LOCAL DEBUG ONLY"
+echo "Remember: Use GitHub Actions for production releases"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# Generate image lists if requested
 if [ "$WITH_LISTS" = "true" ]; then
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -106,7 +104,7 @@ if [ "$WITH_LISTS" = "true" ]; then
 
         make export-images RANCHER_MINOR="$minor" VERSION="$version" LOCAL=true
         if [ $? -ne 0 ]; then
-            echo "❌ Image list export failed for Rancher $minor"
+            echo "Image list export failed for Rancher $minor"
             exit 1
         fi
 
@@ -115,7 +113,7 @@ if [ "$WITH_LISTS" = "true" ]; then
     done
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "✅ Generated image lists for $EXPORTED_COUNT release(s)"
-    echo "📁 Output: dist/<version>/"
+    echo "Generated image lists for $EXPORTED_COUNT release(s)"
+    echo "Output: dist/<version>/"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 fi

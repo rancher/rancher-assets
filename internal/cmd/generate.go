@@ -26,7 +26,6 @@ const (
 //
 //nolint:cyclop // Linear workflow with proper error handling; breaking into smaller functions would reduce clarity
 func Generate(ctx context.Context, args []string) error {
-	// Parse flags
 	fs := flag.NewFlagSet("generate", flag.ExitOnError)
 	update := fs.Bool("update", false, "Query upstream repos and update lock.yaml before generating")
 
@@ -36,21 +35,18 @@ func Generate(ctx context.Context, args []string) error {
 
 	logger.Info("Loading configuration...")
 
-	// Load config
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Load lock file
 	lock, err := lockfile.Load(lockPath)
 	if err != nil {
 		return fmt.Errorf("failed to load lock file: %w", err)
 	}
 
-	// Get Rancher minors and sort for consistent output
 	majors := cfg.ListChartMajors()
-	sort.Strings(majors)
+	sort.Strings(majors) // Consistent output order
 
 	logger.Info("Found %d Rancher minor versions: %v", len(majors), majors)
 
@@ -64,7 +60,6 @@ func Generate(ctx context.Context, args []string) error {
 	}
 	logger.CompleteProgress("%s", scriptHash[:16]+"...")
 
-	// Compute template hashes
 	logger.StartProgress("  - prod.tmpl: ")
 	prodHash, err := lockfile.ComputeFileHash(prodTemplatePath)
 	if err != nil {
@@ -81,10 +76,8 @@ func Generate(ctx context.Context, args []string) error {
 	}
 	logger.CompleteProgress("%s", devHash[:16]+"...")
 
-	// Track if lock file needs to be saved
 	lockChanged := false
 
-	// Check if file hashes changed
 	if lock.CopyScriptHash != scriptHash {
 		lock.CopyScriptHash = scriptHash
 		lockChanged = true
@@ -108,26 +101,20 @@ func Generate(ctx context.Context, args []string) error {
 		lockChanged = true
 	}
 
-	// Update lock file with upstream refs if --update flag is set
 	if *update {
-		// Query upstream for each Rancher minor
 		for _, major := range majors {
 			logger.Info("\nProcessing Rancher minor: %s", major)
 
-			// Ensure lock entry exists
 			lock.EnsureChartVersion(major)
 
-			// Query upstream repos
 			logger.Info("  Querying upstream repositories...")
 			chartCfg, err := cfg.GetChartVersion(major)
 			if err != nil {
 				return fmt.Errorf("failed to get chart version for %s: %w", major, err)
 			}
 
-			// Query both prod and dev branches
 			var prodRefs, devRefs lockfile.UpstreamRefsSet
 
-			// Query PROD branches
 			logger.Info("    [prod]")
 			logger.StartProgress("      - charts @ %s: ", chartCfg.Prod.ChartsBranch)
 			chartsRef, err := lockfile.QueryUpstreamRef(ctx, cfg.ClusterRepos["charts"].URL, chartCfg.Prod.ChartsBranch)

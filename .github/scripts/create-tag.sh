@@ -25,8 +25,6 @@ DOCKERFILE_PATH="$3"
 TAG_MESSAGE="Auto-release for ${DOCKERFILE_PATH} from commit ${COMMIT_SHA}"
 
 # Create annotated tag
-# -a: create annotated tag
-# -m: tag message
 # If tag already exists, this will fail (which is what we want)
 git tag -a "$TAG_NAME" "$COMMIT_SHA" -m "$TAG_MESSAGE"
 

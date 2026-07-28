@@ -99,8 +99,8 @@ All tags follow **Calendar Versioning** with Rancher-minor prefixes:
 
 | Workflow | Trigger | Creates Tags | Builds Images |
 |----------|---------|--------------|---------------|
-| `auto-release.yml` | Push to `main` (dockerfiles/ changes) | ✅ Prod/Dev tags | ❌ (triggers Tier 2) |
-| `release.yml` | Tag push (`v*`) | ❌ | ✅ Multi-arch images |
+| `auto-release.yml` | Push to `main` (dockerfiles/ changes) | Yes (Prod/Dev tags) | No (triggers Tier 2) |
+| `release.yml` | Tag push (`v*`) | No | Yes (Multi-arch images) |
 
 ---
 

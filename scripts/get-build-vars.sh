@@ -59,22 +59,21 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "$RANCHER_MINOR" ] || [ -z "$VERSION" ]; then
-    echo "❌ Error: --minor and --version are required" >&2
+    echo "Error: --minor and --version are required" >&2
     exit 1
 fi
 
-# Detect build type from version tag (CalVer with -dev suffix = dev, without = prod)
+# CalVer with -dev suffix = dev, without = prod
 if echo "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+-[0-9]{8}T[0-9]{4}Z-dev$'; then
     BUILD_TYPE=dev
 elif echo "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+-[0-9]{8}T[0-9]{4}Z$'; then
     BUILD_TYPE=prod
 else
-    echo "❌ Error: Invalid CalVer version format: $VERSION" >&2
+    echo "Error: Invalid CalVer version format: $VERSION" >&2
     echo "Expected: v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]" >&2
     exit 1
 fi
 
-# Read configuration from config.yaml and lock.yaml
 RANCHER_BRANCH=$(yq eval ".chart-versions.\"$RANCHER_MINOR\".rancher-branch" config.yaml 2>/dev/null)
 
 CHART_BRANCH=$(yq eval ".chart-versions.\"$RANCHER_MINOR\".upstream-refs.$BUILD_TYPE.charts.branch" lock.yaml 2>/dev/null)
@@ -85,20 +84,18 @@ CHART_COMMIT=$(yq eval ".chart-versions.\"$RANCHER_MINOR\".upstream-refs.$BUILD_
 PARTNER_COMMIT=$(yq eval ".chart-versions.\"$RANCHER_MINOR\".upstream-refs.$BUILD_TYPE.partner.commit" lock.yaml 2>/dev/null)
 RKE2_COMMIT=$(yq eval ".chart-versions.\"$RANCHER_MINOR\".upstream-refs.$BUILD_TYPE.rke2.commit" lock.yaml 2>/dev/null)
 
-# Validate configuration
 if [ "$CHART_BRANCH" = "null" ] || [ -z "$CHART_BRANCH" ]; then
-    echo "❌ Error: $BUILD_TYPE refs not found in lock.yaml for $RANCHER_MINOR" >&2
+    echo "Error: $BUILD_TYPE refs not found in lock.yaml for $RANCHER_MINOR" >&2
     echo "Run 'make generate' first" >&2
     exit 1
 fi
 
 if [ "$CHART_COMMIT" = "null" ] || [ -z "$CHART_COMMIT" ]; then
-    echo "❌ Error: $BUILD_TYPE commits not found in lock.yaml for $RANCHER_MINOR" >&2
+    echo "Error: $BUILD_TYPE commits not found in lock.yaml for $RANCHER_MINOR" >&2
     echo "Run 'make generate' first" >&2
     exit 1
 fi
 
-# Output in requested format
 case $FORMAT in
     env)
         cat <<EOF
@@ -139,7 +136,7 @@ EOF
 EOF
         ;;
     *)
-        echo "❌ Error: Invalid format: $FORMAT" >&2
+        echo "Error: Invalid format: $FORMAT" >&2
         echo "Valid formats: env, json, shell" >&2
         exit 1
         ;;

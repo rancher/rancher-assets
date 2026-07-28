@@ -1,13 +1,7 @@
 name: Auto Release
 
 # Tier 1 Workflow: Detects changed Dockerfiles and creates CalVer tags
-# This triggers Tier 2 (release.yml) which builds the Docker images
-#
-# Key changes from auto-prerelease.yml:
-# - Dockerfile-centric detection (not lock.yaml-centric)
-# - Creates tags for BOTH prod and dev variants
-# - Uses POSIX scripts (not Go tooling)
-# - Pushes all tags atomically for concurrent releases
+# Tag creation triggers Tier 2 (release.yml) which builds the Docker images
 
 on:
   push:
@@ -50,7 +44,6 @@ jobs:
           echo "$CHANGED"
           echo ""
 
-          # Save for next step
           echo "dockerfiles<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGED" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -73,7 +66,6 @@ jobs:
         env:
           GH_TOKEN: ${{ env.GH_APP_TOKEN }}
         run: |
-          # Reconfigure remote to use App token for authentication
           git remote set-url origin "https://oauth2:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -88,7 +80,6 @@ jobs:
           echo "Creating CalVer tags for changed Dockerfiles..."
           echo ""
 
-          # Process each changed Dockerfile
           echo "${{ steps.detect.outputs.dockerfiles }}" | while IFS= read -r dockerfile; do
             if [ -z "$dockerfile" ]; then
               continue
@@ -96,27 +87,22 @@ jobs:
 
             echo "Processing: $dockerfile"
 
-            # Parse Dockerfile name
             eval $(./.github/scripts/parse-dockerfile-name.sh "$dockerfile")
             echo "  Rancher Minor: $RANCHER_MINOR"
             echo "  Build Type: $BUILD_TYPE"
 
-            # Generate CalVer tag
             TAG=$(./.github/scripts/generate-calver-tag.sh \
               "$RANCHER_MINOR" \
               "$BUILD_TYPE" \
               "$COMMIT_SHA")
             echo "  Tag: $TAG"
 
-            # Create annotated tag
             ./.github/scripts/create-tag.sh "$TAG" "$COMMIT_SHA" "$dockerfile"
 
-            # Collect tag for batch push
             TAGS+=("$TAG")
             echo ""
           done
 
-          # Save tags for summary
           echo "tags<<EOF" >> $GITHUB_OUTPUT
           printf '%s\n' "${TAGS[@]}" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -126,10 +112,8 @@ jobs:
         env:
           GH_TOKEN: ${{ env.GH_APP_TOKEN }}
         run: |
-          # Push all tags in one operation to trigger concurrent release workflows
           echo "Pushing all tags to origin..."
 
-          # Get all tags created in this run
           TAGS=$(git tag --points-at ${{ github.sha }})
 
           if [ -z "$TAGS" ]; then
@@ -141,11 +125,10 @@ jobs:
           echo "$TAGS"
           echo ""
 
-          # Push all tags
           echo "$TAGS" | xargs git push origin
 
           echo ""
-          echo "✅ All tags pushed successfully"
+          echo "All tags pushed successfully"
 
       - name: Summary
         if: steps.detect.outputs.has_changes == 'true'
@@ -155,7 +138,6 @@ jobs:
           echo "Created and pushed CalVer tags for changed Dockerfiles:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # List all tags created
           git tag --points-at ${{ github.sha }} | while read tag; do
             echo "- \`$tag\`" >> $GITHUB_STEP_SUMMARY
           done

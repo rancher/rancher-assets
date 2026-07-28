@@ -1,7 +1,6 @@
 name: Build and Release
 
-# Tier 2 Workflow: Triggered by CalVer tags to build and push Docker images
-# Tier 1 workflows (auto-prerelease.yml or manual scripts) create the tags
+# Tier 2 Workflow: Triggered by (CalVer) tags to build and push Docker images
 
 on:
   push:
@@ -41,21 +40,19 @@ jobs:
           #   v2.14-20260805T1600Z      (stable/prod build)
 
           if [[ "$VERSION" =~ ^v([0-9]+\.[0-9]+)-[0-9]{8}T[0-9]{4}Z-dev$ ]]; then
-            # Dev build (has -dev suffix)
             RANCHER_MINOR="${BASH_REMATCH[1]}"
             BUILD_TYPE=dev
             PRERELEASE=true
-            echo "✅ CalVer prerelease detected - DEV build"
+            echo "CalVer prerelease detected - DEV build"
             echo "   Rancher Minor: $RANCHER_MINOR"
           elif [[ "$VERSION" =~ ^v([0-9]+\.[0-9]+)-[0-9]{8}T[0-9]{4}Z$ ]]; then
-            # Prod build (no -dev suffix)
             RANCHER_MINOR="${BASH_REMATCH[1]}"
             BUILD_TYPE=prod
             PRERELEASE=false
-            echo "✅ CalVer stable detected - PROD build"
+            echo "CalVer stable detected - PROD build"
             echo "   Rancher Minor: $RANCHER_MINOR"
           else
-            echo "❌ ERROR: Invalid CalVer tag format: $VERSION"
+            echo "ERROR: Invalid CalVer tag format: $VERSION"
             echo "Expected: v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]"
             exit 1
           fi

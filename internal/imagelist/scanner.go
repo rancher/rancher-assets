@@ -455,12 +455,11 @@ func WriteImageLists(results CatalogResults, config ExportConfig) error {
 			return err
 		}
 
-		// Generate invalid images report if there are any
 		if len(result.InvalidImages) > 0 {
 			if err := writeInvalidImagesReport(catalogName, result.InvalidImages, config.OutputDir); err != nil {
 				return err
 			}
-			logger.Info("  - %s-invalid-images.txt (%d invalid entries) ⚠️", catalogName, len(result.InvalidImages))
+			logger.Info("  - %s-invalid-images.txt (%d invalid entries)", catalogName, len(result.InvalidImages))
 		}
 	}
 

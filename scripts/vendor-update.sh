@@ -40,7 +40,7 @@ echo "Vendoring dependencies..."
 go mod vendor
 
 echo ""
-echo "✅ Dependencies updated and vendored"
+echo "Dependencies updated and vendored"
 echo ""
 echo "Review changes with: git diff go.mod go.sum vendor/"
 echo "Commit with: git add go.mod go.sum vendor/ && git commit -m 'chore: update Go dependencies'"
