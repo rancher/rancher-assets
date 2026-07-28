@@ -1,7 +1,6 @@
 name: Build and Release
 
-# Tier 2 Workflow: Triggered by CalVer tags to build and push Docker images
-# Tier 1 workflows (auto-prerelease.yml or manual scripts) create the tags
+# Tier 2 Workflow: Triggered by (CalVer) tags to build and push Docker images
 
 on:
   push:
@@ -41,21 +40,19 @@ jobs:
           #   v2.14-20260805T1600Z      (stable/prod build)
 
           if [[ "$VERSION" =~ ^v([0-9]+\.[0-9]+)-[0-9]{8}T[0-9]{4}Z-dev$ ]]; then
-            # Dev build (has -dev suffix)
             RANCHER_MINOR="${BASH_REMATCH[1]}"
             BUILD_TYPE=dev
             PRERELEASE=true
-            echo "✅ CalVer prerelease detected - DEV build"
+            echo "CalVer prerelease detected - DEV build"
             echo "   Rancher Minor: $RANCHER_MINOR"
           elif [[ "$VERSION" =~ ^v([0-9]+\.[0-9]+)-[0-9]{8}T[0-9]{4}Z$ ]]; then
-            # Prod build (no -dev suffix)
             RANCHER_MINOR="${BASH_REMATCH[1]}"
             BUILD_TYPE=prod
             PRERELEASE=false
-            echo "✅ CalVer stable detected - PROD build"
+            echo "CalVer stable detected - PROD build"
             echo "   Rancher Minor: $RANCHER_MINOR"
           else
-            echo "❌ ERROR: Invalid CalVer tag format: $VERSION"
+            echo "ERROR: Invalid CalVer tag format: $VERSION"
             echo "Expected: v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]"
             exit 1
           fi
@@ -174,53 +171,31 @@ jobs:
           prime-username: ${{ env.PRIME_REGISTRY_USERNAME }}
           prime-password: ${{ env.PRIME_REGISTRY_PASSWORD }}
 
-  export-image-lists:
-    needs: [parse-tag, build-and-push]
-    if: success()
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/rancher/ci-image/go1.26:latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: "Read vault secrets"
-        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+      - name: Setup Go
+        if: success()
+        uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v6.0.0
         with:
-          secrets: |
-            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
-            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_PASSWORD ;
+          go-version: '1.26.2'
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4.5.1
-        with:
-          registry: ${{ env.PUBLIC_REGISTRY }}
-          username: ${{ env.DOCKER_USERNAME || vars.DOCKER_USERNAME }}
-          password: ${{ env.DOCKER_PASSWORD || secrets.DOCKER_PASSWORD }}
-
-      - name: Generate image lists
+      - name: Generate image lists from local image
+        if: success()
         run: |
           ./scripts/export-image-lists.sh \
             --image "${{ env.PUBLIC_REGISTRY }}/${{ env.PUBLIC_REPO }}/rancher-assets:${{ needs.parse-tag.outputs.version }}" \
             --version "${{ needs.parse-tag.outputs.version }}" \
-            --output-dir "dist/${{ needs.parse-tag.outputs.version }}"
+            --output-dir "dist/${{ needs.parse-tag.outputs.version }}" \
+            --local
 
       - name: Upload image lists as release assets
+        if: success()
         run: |
           VERSION="${{ needs.parse-tag.outputs.version }}"
           gh release upload "$VERSION" dist/$VERSION/* --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  publish-release:
-    needs: [parse-tag, build-and-push, export-image-lists]
-    if: success()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
       - name: Get tag message
+        if: success()
         id: tag_message
         run: |
           VERSION=${{ needs.parse-tag.outputs.version }}
@@ -230,6 +205,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Generate final release body
+        if: success()
         run: |
           .github/scripts/generate-release-notes.sh \
             "${{ needs.parse-tag.outputs.version }}" \
@@ -239,6 +215,7 @@ jobs:
             > /tmp/release-notes.md
 
       - name: Publish release (undraft)
+        if: success()
         run: |
           VERSION="${{ needs.parse-tag.outputs.version }}"
           gh release edit "$VERSION" \

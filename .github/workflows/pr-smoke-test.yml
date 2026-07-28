@@ -40,7 +40,6 @@ jobs:
           echo "Changed Dockerfiles:"
           echo "$CHANGED"
 
-          # Save for next job (one per line)
           echo "dockerfiles<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGED" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -48,7 +47,6 @@ jobs:
       - name: Set matrix
         id: set-matrix
         run: |
-          # Convert newline-separated list to JSON array for matrix
           DOCKERFILES=$(echo "${{ steps.detect.outputs.dockerfiles }}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "matrix={\"dockerfile\":${DOCKERFILES}}" >> $GITHUB_OUTPUT
 
@@ -68,7 +66,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false  # Test all Dockerfiles even if one fails
-      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+        dockerfile: ${{ fromJson(needs.detect-changes.outputs.matrix).dockerfile }}
 
     steps:
       - name: Checkout repository
@@ -99,17 +99,18 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
           RANCHER_MINOR: ${{ steps.parse.outputs.rancher_minor }}
           DEV: ${{ steps.parse.outputs.build_type == 'dev' }}
-          TARGET_PLATFORMS: linux/amd64  # Single platform for smoke test (--load doesn't support multi-arch)
+          TARGET_PLATFORMS: ${{ matrix.platform }} # Single platform (at a time) for smoke test (--load doesn't support multi-arch)
           GIT_COMMIT: ${{ github.sha }}
           BUILD_DATE: ${{ github.event.pull_request.updated_at }}
           BUILD_URL: ${{ github.server_url }}/${{ github.repository }}/pull/${{ github.event.pull_request.number }}
 
       - name: Report success
         run: |
-          echo "✅ Successfully built ${{ matrix.dockerfile }}" >> $GITHUB_STEP_SUMMARY
-          echo "   Tag: ${{ steps.tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "   Rancher Minor: ${{ steps.parse.outputs.rancher_minor }}" >> $GITHUB_STEP_SUMMARY
-          echo "   Build Type: ${{ steps.parse.outputs.build_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "Successfully built ${{ matrix.dockerfile }}" >> $GITHUB_STEP_SUMMARY
+          echo "Platform: ${{ matrix.platform }}" >> $GITHUB_STEP_SUMMARY
+          echo "Tag: ${{ steps.tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "Rancher Minor: ${{ steps.parse.outputs.rancher_minor }}" >> $GITHUB_STEP_SUMMARY
+          echo "Build Type: ${{ steps.parse.outputs.build_type }}" >> $GITHUB_STEP_SUMMARY
 
   summary:
     needs: [detect-changes, smoke-test]
@@ -118,14 +119,15 @@ jobs:
     steps:
       - name: Check smoke test results
         run: |
-          echo "## PR Smoke Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
           if [ "${{ needs.smoke-test.result }}" = "success" ]; then
-            echo "✅ All Dockerfile builds passed" >> $GITHUB_STEP_SUMMARY
+            echo "Success"
           elif [ "${{ needs.smoke-test.result }}" = "skipped" ]; then
+            echo "## PR Smoke Test Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
             echo "⏭️ No Dockerfiles changed - smoke tests skipped" >> $GITHUB_STEP_SUMMARY
           else
+            echo "## PR Smoke Test Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
             echo "❌ Some Dockerfile builds failed" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi

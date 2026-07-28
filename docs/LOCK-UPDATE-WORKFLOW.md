@@ -145,38 +145,6 @@ If a commit changes both `Dockerfile.2.14` and `Dockerfile.2.14-dev`:
 - `.github/scripts/generate-calver-tag.sh` - Generate CalVer tag
 - `.github/scripts/create-tag.sh` - Create annotated git tag
 
-### Tier 1b: Manual Release (manual-release.yml)
-
-**Trigger:** Manual workflow dispatch (GitHub UI or API)
-
-**When to use:**
-- Release specific Rancher minor(s) on demand
-- Create prod or dev tags explicitly (without Dockerfile changes)
-- Release from a specific commit SHA (not just HEAD)
-- Release ALL active minors at once
-- Emergency releases outside normal flow
-- Rebuild existing Dockerfiles with new timestamps
-
-**Inputs:**
-- `rancher_minor` - Specific minor (e.g., "2.15") or empty for ALL
-- `build_type` - "prod" or "dev"
-- `commit_sha` - Specific commit or empty for HEAD
-
-**Process:**
-1. Determines which Rancher minors to release (one or all)
-2. For each minor:
-   - Generates CalVer tag for specified build type
-   - Creates annotated git tag
-3. Pushes all tags atomically to trigger Tier 2
-
-**Example:**
-Manually release Rancher 2.14 prod:
-- Input: `rancher_minor=2.14`, `build_type=prod`
-- Creates `v2.14-20260724T1530Z`
-- Pushes tag → triggers release workflow
-
-**Scripts Used:**
-- `.github/scripts/generate-calver-tag.sh` - Generate CalVer tag
 
 ### Tier 2: Build and Release (release.yml)
 
@@ -225,34 +193,13 @@ Manually release Rancher 2.14 prod:
 
 **Result:** 4 new releases in ~10 minutes (parallel builds)
 
-### When to Use Manual Release vs Auto-Release
+### Release Workflow
 
-**Use Auto-Release (automatic):**
-- Normal workflow after merging Dockerfile changes
+**Auto-Release (only workflow available):**
+- Automatic releases when Dockerfiles change on main
 - Ensures every Dockerfile change gets a release
+- Creates tags for both prod and dev variants if changed
 - No manual intervention needed
-
-**Use Manual Release (manual-release.yml):**
-- **Rebuild without changes**: Want to create a new release with updated timestamp but Dockerfiles haven't changed
-- **Selective release**: Only want to release specific minor(s), not all that changed
-- **Tag from history**: Need to create a release tag for an older commit
-- **Force prod release**: Need to create a prod tag without merging Dockerfile changes
-- **Testing**: Want to test the release process manually
-- **Emergency**: Need a release ASAP outside normal PR flow
-
-**Example scenarios:**
-
-Scenario: "I need a new v2.14 prod release but the Dockerfile didn't change"
-→ Use manual-release: `rancher_minor=2.14`, `build_type=prod`
-
-Scenario: "Dockerfiles for 2.14 and 2.15 both changed, merge to main"
-→ Auto-release handles it automatically
-
-Scenario: "I need to create a release tag for commit abc123 from last week"
-→ Use manual-release: `commit_sha=abc123`
-
-Scenario: "Only release 2.15-dev, even though 2.14 also changed"
-→ Use manual-release: `rancher_minor=2.15`, `build_type=dev`
 
 ## Shell Scripts for Local Development
 
@@ -311,29 +258,9 @@ make push-image TAG=v2.14-test-dev RANCHER_MINOR=2.14 DEV=true
 
 ## Workflows for Different Teams
 
-### For Release Team Members
+### For Developers/Contributors
 
-**Scenario: I want to do a release for X team**
-
-#### Option A: Release from Current lock.yaml State
-
-If lock.yaml is already up-to-date with the commits you want to release:
-
-```bash
-# Via Makefile:
-make release-manual RELEASE=stable MINOR=2.15
-
-# Or via script directly:
-./scripts/create-manual-release.sh --release=stable --minor=2.15
-
-# Creates CalVer tag: v2.15-20260716T1430Z (or with -dev suffix for prerelease)
-```
-
-This creates tags using the existing lock.yaml state at the specified commit.
-
-#### Option B: Update lock.yaml First, Then Release
-
-If you need to pick up newer upstream commits:
+**Scenario: Update lock.yaml and create releases**
 
 ```bash
 # 1. Pull latest main
@@ -344,28 +271,18 @@ git pull
 make generate
 
 # 3. Review changes
-git diff lock.yaml
+git diff lock.yaml dockerfiles/
 
-# 4. Commit and push
+# 4. Commit and create PR
 git add lock.yaml dockerfiles/
-git commit -m "Update lock.yaml for [2.15] release"
-git push origin main
+git commit -m "Update lock.yaml with latest upstream commits"
+git push origin update-lock
 
-# 5. Trigger manual release workflow
-make release-manual RELEASE=stable MINOR=2.15
+# 5. After PR is merged to main:
+#    - auto-release.yml automatically detects changed Dockerfiles
+#    - Creates CalVer tags for each changed Dockerfile
+#    - Tags trigger build workflow
 ```
-
-#### Option C: Release from Specific Upstream Commits
-
-If you need to release a specific upstream commit (not the latest):
-
-**This is NOT currently supported.** The `make generate` command always queries the latest commit for configured branches. 
-
-**Workaround:**
-1. Manually edit lock.yaml to set desired commit SHAs (NOT RECOMMENDED)
-2. OR temporarily change config.yaml branches to point to tags/commits, then regenerate
-
-**Better solution:** This should be enhanced to support `--pin-commit` flags in the generate command.
 
 ### For Chart Team Members
 
@@ -411,10 +328,9 @@ gh pr create --title "Update charts to <commit-sha>" \
   --body "Picks up changes from rancher/charts#<PR-number>"
 
 # 7. After merge to main:
-#    - Auto-prerelease workflow (when implemented) creates CalVer tag with -dev suffix
-#      Example: v2.15-20260716T1430Z-dev
-#    - OR Release Team manually triggers release workflow
-#    - Build workflow creates the image
+#    - Auto-release workflow creates CalVer tags for changed Dockerfiles
+#      Example: v2.15-20260716T1430Z, v2.15-20260716T1430Z-dev
+#    - Build workflow creates the images
 ```
 
 #### Automated Process (NOT YET IMPLEMENTED)
@@ -467,40 +383,36 @@ git commit -m "Bump BCI version to 16.1"
                       │
          ┌────────────┴─────────────┐
          │                          │
-    ┌────▼────┐              ┌──────▼──────┐
-    │ I'm     │              │ I'm Release │
-    │ Chart   │              │ Team        │
-    │ Team    │              │             │
-    └────┬────┘              └──────┬──────┘
-         │                          │
-         │                          │
-    ┌────▼─────────────────┐   ┌────▼──────────────────┐
-    │ Did I merge to       │   │ Do I need new         │
-    │ upstream charts?     │   │ upstream commits?     │
-    └────┬─────────────────┘   └────┬──────────────────┘
-         │                          │
-    ┌────▼────┐              ┌──────▼──────┐
-    │ YES:    │              │ YES:        │
-    │ Create  │              │ Run         │
-    │ PR to   │              │ make        │
-    │ update  │              │ generate    │
-    │ lock.   │              │ first       │
-    │ yaml    │              │             │
-    └────┬────┘              └──────┬──────┘
-         │                          │
-         │                          │
-    ┌────▼────────────────────┐    │
-    │ make generate           │    │
-    │ git commit              │    │
-    │ Create PR               │    │
-    └────┬────────────────────┘    │
-         │                          │
-         │                   ┌──────▼──────┐
-         └───────────────────► Trigger     │
-                             │ Manual      │
-                             │ Release     │
-                             │ Workflow    │
-                             └─────────────┘
+    ┌────▼────┐
+    │ Anyone  │
+    │ who     │
+    │ needs   │
+    │ update  │
+    └────┬────┘
+         │
+    ┌────▼─────────────────┐
+    │ Do I need new        │
+    │ upstream commits?    │
+    └────┬─────────────────┘
+         │
+    ┌────▼────┐
+    │ Run     │
+    │ make    │
+    │ generate│
+    └────┬────┘
+         │
+    ┌────▼────────────────────┐
+    │ make generate           │
+    │ git commit              │
+    │ Create PR               │
+    └────┬────────────────────┘
+         │
+    ┌────▼────────────────────┐
+    │ PR merged to main       │
+    │ Auto-release creates    │
+    │ tags for changed        │
+    │ Dockerfiles             │
+    └─────────────────────────┘
 ```
 
 ## Understanding lock.yaml Structure
@@ -726,23 +638,16 @@ go run main.go generate --pin-commits='{"v1": {"prod": {"charts": "abc123"}}}'
 
 ## Summary
 
-**Current workflow is manual:**
+**Current workflow:**
 1. Developer/Chart Team runs `make generate`
-2. Commits lock.yaml changes
+2. Commits lock.yaml and Dockerfile changes
 3. Merges to main
-4. Release Team manually triggers release
-
-**Documented workflow (not fully implemented):**
-1. Developer/Chart Team runs `make generate`
-2. Commits lock.yaml changes  
-3. Merges to main
-4. **Auto-prerelease workflow** auto-creates CalVer dev tags (e.g., v2.15-20260716T1430Z-dev) ← Missing
-5. OR Release Team manually triggers release (creates CalVer tags)
-
-**Ideal workflow (recommended):**
-1. Chart Team merges to upstream
-2. **Scheduled sync workflow** detects changes and creates PR ← Missing
-3. PR reviewed and merged
-4. **Auto-prerelease workflow** auto-creates CalVer dev tags ← Missing
+4. **Auto-release workflow** auto-creates CalVer tags for each changed Dockerfile
 5. Images built automatically
-6. Release Team promotes dev to stable when ready (removes -dev suffix via new tag)
+
+**Future improvement (recommended):**
+1. Chart Team merges to upstream
+2. **Scheduled sync workflow** detects changes and creates PR ← Not implemented
+3. PR reviewed and merged
+4. Auto-release workflow creates tags
+5. Images built automatically

@@ -3,9 +3,7 @@
 #
 # PROD Dockerfile - uses stable/release branches and commits
 
-ARG BCI_VERSION=16.0
-
-FROM registry.suse.com/bci/bci-base:${BCI_VERSION} AS builder
+FROM registry.suse.com/bci/bci-base:16.0@sha256:c121aa8f01348b602e5b29b3e868693de3917cc15ab4735fcbd013ea159c426f AS builder
 RUN zypper refresh && zypper -n install git-core
 
 # Clone rancher-charts repository (PROD)
@@ -25,7 +23,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git init /var/lib/rancher-data/local-catalogs/v2/rancher-partner-charts/8f17acdce9bffd6e05a58a3798840e408c4ea71783381ecd2e9af30baad65974 && \
     cd /var/lib/rancher-data/local-catalogs/v2/rancher-partner-charts/8f17acdce9bffd6e05a58a3798840e408c4ea71783381ecd2e9af30baad65974 && \
     git remote add origin https://git.rancher.io/partner-charts && \
-    git fetch --depth 1 origin f51290d3dd4d99b8c911cfef4ff0aa4d4091a747 && \
+    git fetch --depth 1 origin 0a393a9b752a65cb1dbb363c889013e8abc21c15 && \
     git checkout FETCH_HEAD
 
 # Clone rke2-charts repository (PROD)
@@ -39,7 +37,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git checkout FETCH_HEAD
 
 # Consolidated charts image
-FROM registry.suse.com/bci/bci-micro:${BCI_VERSION}
+FROM registry.suse.com/bci/bci-micro:16.0@sha256:0a1b2222f55d4505ff50b9355a1877b07b5e442d7fd6efdc44b907cb0dd9572d
 
 # Copy chart repositories
 COPY --from=rancher-charts /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721 /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721
@@ -55,7 +53,7 @@ ENV CHART_BRANCH=release-v2.15 \
     PARTNER_BRANCH=main \
     RKE2_BRANCH=main \
     CHART_COMMIT=eabbfa468bd3f3da7cc30df388b07fc342499e95 \
-    PARTNER_COMMIT=f51290d3dd4d99b8c911cfef4ff0aa4d4091a747 \
+    PARTNER_COMMIT=0a393a9b752a65cb1dbb363c889013e8abc21c15 \
     RKE2_COMMIT=5fbaf208eef9eeeb5fbc0a37b05224365a5e8f27
 
 # Runtime labels - provided by build
@@ -81,7 +79,7 @@ LABEL "io.artifacthub.package.logo-url"="https://raw.githubusercontent.com/ranch
     "io.rancher.charts.branch"=release-v2.15 \
     "io.rancher.charts.commit"=eabbfa468bd3f3da7cc30df388b07fc342499e95 \
     "io.rancher.partner.branch"=main \
-    "io.rancher.partner.commit"=f51290d3dd4d99b8c911cfef4ff0aa4d4091a747 \
+    "io.rancher.partner.commit"=0a393a9b752a65cb1dbb363c889013e8abc21c15 \
     "io.rancher.rke2.branch"=main \
     "io.rancher.rke2.commit"=5fbaf208eef9eeeb5fbc0a37b05224365a5e8f27
 

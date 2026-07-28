@@ -12,7 +12,6 @@ import (
 
 // ExportImages will export a list of images for each chart repo
 func ExportImages(ctx context.Context, args []string) error {
-	// Parse flags
 	fs := flag.NewFlagSet("export-images", flag.ExitOnError)
 	chartsPath := fs.String("charts-path", "", "Path to extracted chart catalogs (required)")
 	version := fs.String("version", "", "Chart image version being exported (required)")
@@ -37,13 +36,11 @@ func ExportImages(ctx context.Context, args []string) error {
 	logger.Info("  Version: %s", config.Version)
 	logger.Info("  Output dir: %s\n", config.OutputDir)
 
-	// Scan charts for image references
 	results, err := imagelist.ScanCharts(config)
 	if err != nil {
 		return fmt.Errorf("failed to scan charts: %w", err)
 	}
 
-	// Calculate totals across all catalogs
 	totalValid := 0
 	totalInvalid := 0
 	for _, result := range results {
@@ -55,10 +52,9 @@ func ExportImages(ctx context.Context, args []string) error {
 	logger.Info("  Catalogs scanned: %d", len(results))
 	logger.Info("  Total valid images: %d", totalValid)
 	if totalInvalid > 0 {
-		logger.Info("  Total invalid images: %d ⚠️", totalInvalid)
+		logger.Info("  Total invalid images: %d", totalInvalid)
 	}
 
-	// Write image lists and scripts
 	if err := imagelist.WriteImageLists(results, config); err != nil {
 		return fmt.Errorf("failed to write image lists: %w", err)
 	}

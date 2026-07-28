@@ -4,7 +4,8 @@
 
 # Base images (BCI versions)
 base-image:
-  bci-version: "16.0"
+  bci-base: "16.0@sha256:c121aa8f01348b602e5b29b3e868693de3917cc15ab4735fcbd013ea159c426f"
+  bci-micro: "16.0@sha256:0a1b2222f55d4505ff50b9355a1877b07b5e442d7fd6efdc44b907cb0dd9572d"
 
 chart-versions:
   # Rancher 2.14.x

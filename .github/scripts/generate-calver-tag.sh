@@ -26,33 +26,24 @@ RANCHER_MINOR="$1"
 BUILD_TYPE="$2"
 COMMIT_SHA="$3"
 
-# Validate build type
 if [ "$BUILD_TYPE" != "prod" ] && [ "$BUILD_TYPE" != "dev" ]; then
     echo "Error: build_type must be 'prod' or 'dev', got: $BUILD_TYPE" >&2
     exit 1
 fi
 
-# Get commit timestamp (Unix epoch)
 COMMIT_TIMESTAMP=$(git show -s --format=%ct "$COMMIT_SHA")
 
-# Convert to CalVer format (YYYYMMDDTHHMM)Z in UTC
-# Note: Using GNU date syntax, which works on Linux (GitHub Actions)
-# macOS users may need to use: date -u -r "$COMMIT_TIMESTAMP" '+%Y%m%dT%H%MZ'
+# GNU date (Linux/GitHub Actions) vs BSD date (macOS)
 if date --version >/dev/null 2>&1; then
-    # GNU date (Linux)
     CALVER_DATE=$(date -u -d "@$COMMIT_TIMESTAMP" '+%Y%m%dT%H%MZ')
 else
-    # BSD date (macOS)
     CALVER_DATE=$(date -u -r "$COMMIT_TIMESTAMP" '+%Y%m%dT%H%MZ')
 fi
 
-# Build tag: v{RANCHER_MINOR}-{CALVER_DATE}[-dev]
 TAG="v${RANCHER_MINOR}-${CALVER_DATE}"
 
-# Append -dev suffix for dev builds
 if [ "$BUILD_TYPE" = "dev" ]; then
     TAG="${TAG}-dev"
 fi
 
-# Output the tag
 echo "$TAG"

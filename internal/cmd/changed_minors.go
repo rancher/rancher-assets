@@ -14,7 +14,6 @@ import (
 
 // ChangedMinors will print the list of minor versions with changes
 func ChangedMinors(ctx context.Context, args []string) error {
-	// Parse flags
 	fs := flag.NewFlagSet("changed-minors", flag.ExitOnError)
 	fromCommit := fs.String("from", "", "From commit (required)")
 	toCommit := fs.String("to", "", "To commit (required)")
@@ -28,22 +27,18 @@ func ChangedMinors(ctx context.Context, args []string) error {
 		return errors.New("both --from and --to are required")
 	}
 
-	// Get changed Rancher minors
 	changed, err := lockfile.ChangedMajors(ctx, *fromCommit, *toCommit)
 	if err != nil {
 		return fmt.Errorf("failed to identify changed versions from lock file: %w", err)
 	}
 
-	// Ensure we have an empty array instead of nil for JSON marshaling
 	if changed == nil {
 		changed = []string{}
 	}
 
-	// Sort for consistent output
-	sort.Strings(changed)
+	sort.Strings(changed) // Consistent output order
 
 	if *verbose {
-		// Verbose output - show what changed
 		if len(changed) == 0 {
 			logger.Info("No Rancher minors with upstream ref changes detected")
 			logger.Info("(Only timestamp changes in lock.yaml)")

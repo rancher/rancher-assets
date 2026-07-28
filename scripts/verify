@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+# Verify that generated files (dockerfiles/ and lock.yaml) have no uncommitted changes.
+# This ensures developers ran 'make generate' and committed the results.
+
+# Refresh the index to avoid false positives from stale timestamps
+git update-index --refresh >/dev/null 2>&1 || true
+
+# Check only the generated files
+if [ -n "$(git status --porcelain dockerfiles/ lock.yaml)" ]; then
+    echo "❌ Error: uncommitted changes detected in generated files"
+    echo ""
+    git status --porcelain dockerfiles/ lock.yaml
+    echo ""
+    echo "Run 'make generate' and commit the changes"
+    exit 1
+fi
+
+echo "✅ Verified: all generated files are committed"
+exit 0

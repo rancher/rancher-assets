@@ -36,9 +36,6 @@ If a script is used by GitHub Actions workflows, it belongs in `.github/scripts/
 **`vendor-update.sh`** - Updates Go vendor dependencies
 - Used by: `make vendor-update`
 
-**`create-manual-release.sh`** - Creates manual release tags
-- Used by: `.github/workflows/manual-release.yml`
-
 ## Usage
 
 ```bash
@@ -50,9 +47,6 @@ If a script is used by GitHub Actions workflows, it belongs in `.github/scripts/
 
 # Update vendor dependencies
 ./scripts/vendor-update.sh
-
-# Create a manual release
-./scripts/create-manual-release.sh --help
 ```
 
 ## Relationship with `.github/scripts/`

@@ -6,28 +6,28 @@ chart-versions:
         upstream-refs:
             prod:
                 charts:
-                    fetched-at: 2026-07-27T12:16:47.395373Z
+                    fetched-at: 2026-07-28T13:34:11.839885Z
                     branch: release-v2.14
                     commit: 5de86eba1ea29880e38ea6345cc3f176f97a4f15
                 partner:
-                    fetched-at: 2026-07-27T12:16:47.670814Z
+                    fetched-at: 2026-07-28T13:34:12.003841Z
                     branch: main
-                    commit: f51290d3dd4d99b8c911cfef4ff0aa4d4091a747
+                    commit: 0a393a9b752a65cb1dbb363c889013e8abc21c15
                 rke2:
-                    fetched-at: 2026-07-27T12:16:47.909114Z
+                    fetched-at: 2026-07-28T13:34:12.163563Z
                     branch: main
                     commit: 5fbaf208eef9eeeb5fbc0a37b05224365a5e8f27
             dev:
                 charts:
-                    fetched-at: 2026-07-27T12:16:48.187507Z
+                    fetched-at: 2026-07-28T13:34:12.333076Z
                     branch: dev-v2.14
-                    commit: ae277d88c4b0aff65faab82ef7cc1c05d057e2bf
+                    commit: e68319988988188a41642f465d9e6f5f0289b28b
                 partner:
-                    fetched-at: 2026-07-27T12:16:48.486143Z
+                    fetched-at: 2026-07-28T13:34:12.564801Z
                     branch: main
-                    commit: f51290d3dd4d99b8c911cfef4ff0aa4d4091a747
+                    commit: 0a393a9b752a65cb1dbb363c889013e8abc21c15
                 rke2:
-                    fetched-at: 2026-07-27T12:16:48.662154Z
+                    fetched-at: 2026-07-28T13:34:12.778919Z
                     branch: main
                     commit: 5fbaf208eef9eeeb5fbc0a37b05224365a5e8f27
     "2.15":
@@ -37,33 +37,36 @@ chart-versions:
         upstream-refs:
             prod:
                 charts:
-                    fetched-at: 2026-07-27T12:16:48.909068Z
+                    fetched-at: 2026-07-28T13:34:12.963866Z
                     branch: release-v2.15
                     commit: eabbfa468bd3f3da7cc30df388b07fc342499e95
                 partner:
-                    fetched-at: 2026-07-27T12:16:49.168937Z
+                    fetched-at: 2026-07-28T13:34:13.216757Z
                     branch: main
-                    commit: f51290d3dd4d99b8c911cfef4ff0aa4d4091a747
+                    commit: 0a393a9b752a65cb1dbb363c889013e8abc21c15
                 rke2:
-                    fetched-at: 2026-07-27T12:16:49.467157Z
+                    fetched-at: 2026-07-28T13:34:13.386892Z
                     branch: main
                     commit: 5fbaf208eef9eeeb5fbc0a37b05224365a5e8f27
             dev:
                 charts:
-                    fetched-at: 2026-07-27T12:16:49.74325Z
+                    fetched-at: 2026-07-28T13:34:13.562479Z
                     branch: dev-v2.15
-                    commit: 1e003f667ef2ddd0704fcfd1d5b0ce1975726f39
+                    commit: c1fdadaf5af17e949a8f49f00382e2c235168449
                 partner:
-                    fetched-at: 2026-07-27T12:16:49.987097Z
+                    fetched-at: 2026-07-28T13:34:13.744442Z
                     branch: main
-                    commit: f51290d3dd4d99b8c911cfef4ff0aa4d4091a747
+                    commit: 0a393a9b752a65cb1dbb363c889013e8abc21c15
                 rke2:
-                    fetched-at: 2026-07-27T12:16:50.2226Z
+                    fetched-at: 2026-07-28T13:34:13.905891Z
                     branch: main
                     commit: 5fbaf208eef9eeeb5fbc0a37b05224365a5e8f27
+base-image:
+    bci-base: 16.0@sha256:c121aa8f01348b602e5b29b3e868693de3917cc15ab4735fcbd013ea159c426f
+    bci-micro: 16.0@sha256:0a1b2222f55d4505ff50b9355a1877b07b5e442d7fd6efdc44b907cb0dd9572d
 copy-script-hash: 9b9da8e26b3377be489743e5f7164394e3fb3c67ea134cb629ba1904f8cd8053
 template-hashes:
-    prod-template: 2bc40dc78b1a45731e4cdf08aabf3fd7a6c49bd61b463c2d0f2bd31f57f8c632
-    dev-template: 882c42b20f8bc7c67f1b57fbf179ca955baa61aa8afde5cb551001551029fc8f
-generated-at: 2026-07-27T12:16:50.22271Z
+    prod-template: 0cf523783cb5d391cf9478f453bf1ce88599256dc3192b27c1c80774c49efa40
+    dev-template: 6f2d670e49909f20a274718cd8a9a0e1f5af5ebbce912ae515a337183ac4e6ec
+generated-at: 2026-07-28T13:58:45.734325302Z
 generator-version: v0.1.0

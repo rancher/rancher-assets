@@ -58,7 +58,6 @@ fi
 
 echo "Generating image lists for $VERSION..."
 
-# Pull image if not local
 if [ "$LOCAL" != "true" ]; then
     echo "Pulling image from registry..."
     docker pull "$IMAGE"
@@ -66,7 +65,6 @@ else
     echo "Using local image (skipping pull)..."
 fi
 
-# Extract chart catalogs
 TEMP_DIR=${TEMP_DIR:-"/tmp/rancher-assets-charts-$VERSION"}
 echo "Extracting chart catalogs to $TEMP_DIR..."
 CONTAINER_ID=$(docker create "$IMAGE")
@@ -75,7 +73,7 @@ mkdir -p "$TEMP_DIR"
 docker cp "$CONTAINER_ID:/var/lib/rancher-data/local-catalogs/v2" "$TEMP_DIR/"
 docker rm "$CONTAINER_ID" >/dev/null
 
-# The extracted catalogs are bare git repos - need to checkout the working tree
+# Extracted catalogs are bare git repos - checkout working tree
 echo "Checking out repo contents..."
 for catalog_dir in "$TEMP_DIR/v2"/*; do
     if [ -d "$catalog_dir/.git" ]; then
@@ -84,7 +82,6 @@ for catalog_dir in "$TEMP_DIR/v2"/*; do
     fi
 done
 
-# Run image list generator
 echo "Scanning charts for image references..."
 mkdir -p "$OUTPUT_DIR"
 go run main.go export-images \
@@ -93,6 +90,6 @@ go run main.go export-images \
     --output-dir "$OUTPUT_DIR"
 
 echo ""
-echo "✅ Image lists generated in $OUTPUT_DIR/"
+echo "Image lists generated in $OUTPUT_DIR/"
 echo ""
 ls -lh "$OUTPUT_DIR/"

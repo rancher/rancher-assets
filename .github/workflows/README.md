@@ -6,8 +6,8 @@ This repository uses a **two-tier workflow architecture** for clean separation o
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ TIER 1: Tag Creation (lock.yaml → CalVer tags)                │
-│ Lightweight, local-friendly, just Git operations               │
+│ TIER 1: Tag Creation (Dockerfiles → CalVer tags)              │
+│ Automatic tag creation when Dockerfiles change on main         │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
                         Git tag push
@@ -20,50 +20,22 @@ This repository uses a **two-tier workflow architecture** for clean separation o
 
 ---
 
-## Tier 1: Tag Creation Workflows
+## Tier 1: Tag Creation Workflow
 
 ### Purpose
-Detect changes and create CalVer tags. These workflows are **lightweight** and can be run locally or in CI.
+Automatically detect Dockerfile changes and create CalVer tags.
 
-### Workflows
+### Workflow
 
-#### 1. `auto-prerelease.yml` - Automatic Pre-releases
-- **Trigger:** Push to `main` when `lock.yaml` or `dockerfiles/` change
+#### `auto-release.yml` - Automatic Releases
+- **Trigger:** Push to `main` when `dockerfiles/**` change
 - **Does:**
-  1. Detects which Rancher minors changed
-  2. Generates CalVer dev tags (e.g., `v2.15-20260716T1430Z-dev`)
+  1. Detects which specific Dockerfiles changed
+  2. Generates CalVer tags (with `-dev` suffix for dev builds)
   3. Pushes tags to origin
-- **Tags created:** With `-dev` suffix for pre-releases
-- **Local equivalent:** `./scripts/create-auto-prerelease.sh`
-
-#### 2. `manual-release.yml` - Manual Releases
-- **Trigger:** Manual via GitHub UI (`workflow_dispatch`)
-- **Does:**
-  1. Accepts Rancher minor and release type
-  2. Generates CalVer tags (with or without `-dev` suffix)
-  3. Pushes tags to origin
-- **Tags created:** With or without `-dev` suffix based on release type
-- **Local equivalent:** `make release-manual RELEASE=stable MINOR=2.15`
-
-### Local Execution (Tier 1)
-
-For local tag creation, use the scripts directly:
-
-```bash
-# Auto pre-release (detect changes and create dev tags)
-./scripts/create-auto-prerelease.sh
-
-# Manual release (stable tags)
-make release-manual RELEASE=stable MINOR=2.15
-
-# Manual release (prerelease/dev tags)
-make release-manual RELEASE=prerelease MINOR=2.15
-
-# Or use the script directly
-./scripts/create-manual-release.sh --release=stable --minor=2.15
-```
-
-**Why local?** Tag creation is just Git operations - no Docker builds required. Release Team can create tags locally and push them, triggering CI builds.
+- **Tags created:**
+  - `v{MINOR}-{TIMESTAMP}` for prod Dockerfiles
+  - `v{MINOR}-{TIMESTAMP}-dev` for dev Dockerfiles
 
 ---
 
@@ -127,53 +99,31 @@ All tags follow **Calendar Versioning** with Rancher-minor prefixes:
 
 | Workflow | Trigger | Creates Tags | Builds Images |
 |----------|---------|--------------|---------------|
-| `auto-prerelease.yml` | Push to `main` (lock.yaml changes) | ✅ Dev tags | ❌ (triggers Tier 2) |
-| `manual-release.yml` | Manual (GitHub UI) | ✅ Stable or Dev | ❌ (triggers Tier 2) |
-| `release.yml` | Tag push (`v*`) | ❌ | ✅ Multi-arch images |
-
-**Local scripts:**
-- `scripts/create-auto-prerelease.sh` → Auto dev tags
-- `scripts/create-manual-release.sh` → Manual stable/dev tags
+| `auto-release.yml` | Push to `main` (dockerfiles/ changes) | Yes (Prod/Dev tags) | No (triggers Tier 2) |
+| `release.yml` | Tag push (`v*`) | No | Yes (Multi-arch images) |
 
 ---
 
 ## Complete Release Flow
 
-### Automatic Pre-release (Chart Team)
+### Automatic Release (On Dockerfile Changes)
 
 ```
-1. Chart Team updates lock.yaml (via make generate)
+1. Developer updates lock.yaml (via make generate)
    ↓
 2. PR merged to main
    ↓
-3. auto-prerelease.yml detects changes
+3. auto-release.yml detects Dockerfile changes
    ↓
-4. CalVer dev tag created: v2.15-20260716T1430Z-dev
+4. CalVer tags created for each changed Dockerfile:
+   - Prod: v2.15-20260716T1430Z
+   - Dev: v2.15-20260716T1430Z-dev
    ↓
-5. release.yml triggered by tag
+5. release.yml triggered by tags (parallel builds)
    ↓
-6. Docker image built and pushed
+6. Docker images built and pushed
    ↓
-7. GitHub release created
-```
-
-### Manual Stable Release (Release Team)
-
-```
-1. Release Team verifies lock.yaml state
-   ↓
-2. Runs locally: make release-manual RELEASE=stable MINOR=2.15
-   OR runs via GitHub UI: manual-release.yml
-   ↓
-3. CalVer stable tag created: v2.15-20260805T1600Z
-   ↓
-4. release.yml triggered by tag
-   ↓
-5. Docker image built and pushed
-   ↓
-6. GitHub release created
-   ↓
-7. PR created to rancher/rancher (stable only)
+7. GitHub releases created
 ```
 
 ---
@@ -217,23 +167,13 @@ All tags follow **Calendar Versioning** with Rancher-minor prefixes:
 
 ## FAQ
 
-### Q: When should I use `auto-prerelease.yml` vs `manual-release.yml`?
+### Q: How do releases get created?
 
-- **Auto:** For Chart Team updates when lock.yaml changes (dev tags)
-- **Manual:** For Release Team promotions to stable (stable tags)
+Releases are created automatically when Dockerfiles change on the `main` branch. The `auto-release.yml` workflow detects changes and creates CalVer tags, which trigger image builds.
 
-### Q: Can I create tags locally instead of using workflows?
+### Q: Can I create tags manually?
 
-**Yes!** Use the scripts:
-```bash
-./scripts/create-manual-release.sh --release=stable --minor=2.15
-```
-
-This is the **recommended** approach for Release Team members.
-
-### Q: What happens if I push a tag manually?
-
-`release.yml` (Tier 2) will automatically trigger and build the image. Just make sure your tag follows the CalVer format.
+You can manually create and push git tags following the CalVer format (`v{MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]`), and `release.yml` will automatically trigger and build the image.
 
 ### Q: How do I test a workflow change?
 
