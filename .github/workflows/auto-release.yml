@@ -28,6 +28,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0  # Need full history to detect changes
+          persist-credentials: false # Prevent git from ignoring the oauth token
 
       - name: Detect changed Dockerfiles
         id: detect
@@ -64,22 +65,12 @@ jobs:
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         with:
           secrets: |
-            secret/data/github/repo/${{ github.repository }}/github/pr-actions-write-app/credentials appId | APP_ID;
-            secret/data/github/repo/${{ github.repository }}/github/pr-actions-write-app/credentials privateKey | PRIVATE_KEY
-
-      - name: Generate GitHub App Token
-        id: generate_token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ env.APP_ID }}
-          private-key: ${{ env.PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: rancher-assets
+            github/token/rancher--rancher-assets--contents--write token | GH_APP_TOKEN;
 
       - name: Configure git to use GitHub App token
         if: steps.detect.outputs.has_changes == 'true'
         env:
-          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+          GH_TOKEN: ${{ env.GH_APP_TOKEN }}
         run: |
           # Reconfigure remote to use App token for authentication
           git remote set-url origin "https://oauth2:${GH_TOKEN}@github.com/${{ github.repository }}.git"
@@ -131,6 +122,8 @@ jobs:
 
       - name: Push all tags atomically
         if: steps.detect.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ env.GH_APP_TOKEN }}
         run: |
           # Push all tags in one operation to trigger concurrent release workflows
           echo "Pushing all tags to origin..."
