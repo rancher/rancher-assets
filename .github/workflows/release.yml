@@ -97,22 +97,9 @@ jobs:
           prerelease: ${{ steps.parse.outputs.prerelease }}
           body: ${{ steps.draft_body.outputs.body }}
 
-      - name: Verify draft release created
-        run: |
-          VERSION="${{ steps.parse.outputs.version }}"
-          RELEASE_ID="${{ steps.create_draft.outputs.id }}"
-          echo "Created draft release:"
-          echo "  Tag: $VERSION"
-          echo "  Release ID: $RELEASE_ID"
-          echo "  URL: ${{ steps.create_draft.outputs.html_url }}"
-
   build-and-push:
     needs: parse-tag
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -199,37 +186,7 @@ jobs:
         if: success()
         run: |
           VERSION="${{ needs.parse-tag.outputs.version }}"
-          RELEASE_ID="${{ needs.parse-tag.outputs.release_id }}"
-
-          echo "Uploading assets to release ID: $RELEASE_ID (tag: $VERSION)..."
-
-          # Delete existing assets if any (clobber behavior)
-          EXISTING_ASSETS=$(gh api "/repos/${{ github.repository }}/releases/$RELEASE_ID/assets" --jq '.[].id' || echo "")
-          if [ -n "$EXISTING_ASSETS" ]; then
-            echo "Removing existing assets..."
-            echo "$EXISTING_ASSETS" | while read asset_id; do
-              gh api -X DELETE "/repos/${{ github.repository }}/releases/assets/$asset_id" || true
-            done
-          fi
-
-          # Upload each asset using the release ID via GitHub API
-          for asset in dist/$VERSION/*; do
-            if [ -f "$asset" ]; then
-              asset_name=$(basename "$asset")
-              echo "  Uploading: $asset_name"
-
-              # Get upload URL for this release
-              UPLOAD_URL=$(gh api "/repos/${{ github.repository }}/releases/$RELEASE_ID" --jq '.upload_url' | sed 's/{?name,label}//')
-
-              # Upload the asset
-              gh api "${UPLOAD_URL}?name=${asset_name}" \
-                --method POST \
-                --header "Content-Type: application/octet-stream" \
-                --input "$asset"
-            fi
-          done
-
-          echo "All assets uploaded successfully"
+          gh release upload "$VERSION" dist/$VERSION/* --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -257,19 +214,9 @@ jobs:
         if: success()
         run: |
           VERSION="${{ needs.parse-tag.outputs.version }}"
-          RELEASE_ID="${{ needs.parse-tag.outputs.release_id }}"
-
-          echo "Publishing release ID: $RELEASE_ID (tag: $VERSION)..."
-
-          # Read release notes
-          RELEASE_BODY=$(cat /tmp/release-notes.md)
-
-          # Update release using the API with release ID
-          gh api "/repos/${{ github.repository }}/releases/$RELEASE_ID" \
-            --method PATCH \
-            --field draft=false \
-            --field body="$RELEASE_BODY"
-
+          gh release edit "$VERSION" \
+            --draft=false \
+            --notes-file /tmp/release-notes.md
           echo "Release $VERSION published successfully!"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
