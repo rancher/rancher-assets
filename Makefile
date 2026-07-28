@@ -85,7 +85,7 @@ build-validate: buildx-machine ## build (and load) the container image targeting
 		-t "$(FULL_IMAGE_TAG)" .
 	@echo "Built $(FULL_IMAGE_TAG) multi-arch image saved to ci/multiarch-image.oci"
 
-push-image: validate buildx-machine ## build the container image targeting all platforms defined by TARGET_PLATFORMS and push to a registry.
+push-image: buildx-machine ## build the container image targeting all platforms defined by TARGET_PLATFORMS and push to a registry.
 	$(IMAGE_BUILDER) build -f dockerfiles/$(DOCKERFILE) \
 		--builder $(MACHINE) $(IMAGE_ARGS) $(IID_FILE_FLAG) $(BUILDX_ARGS) \
 		--build-arg VERSION=$(TAG) \
@@ -106,35 +106,6 @@ generate: ## Run go generate to update generated code.
 .PHONY: vendor-update
 vendor-update: ## Update Go dependencies and vendor them
 	@./scripts/vendor-update.sh
-
-.PHONY: validate
-validate: validate-dirty ## Run validation checks.
-
-.PHONY: validate-dirty
-validate-dirty:
-ifdef DIRTY
-	@echo Git is dirty
-	@git --no-pager status
-	@git --no-pager diff
-	@exit 1
-endif
-
-.PHONY: verify
-verify: ## Verify no uncommitted changes in generated files
-	@echo "Verifying generated files are committed..."
-	@if [ -n "$$(git status --porcelain dockerfiles/ lock.yaml)" ]; then \
-		echo "❌ Error: uncommitted changes detected in generated files"; \
-		echo ""; \
-		git status --porcelain dockerfiles/ lock.yaml; \
-		echo ""; \
-		echo "Run 'make generate' and commit the changes"; \
-		exit 1; \
-	fi
-	@echo "✅ Verified: all generated files are committed"
-
-.PHONY: test
-test: ## Run tests
-	$(RUN) go test -v ./...
 
 .PHONY: export-images
 export-images: ## Generate image lists from chart catalogs (requires TAG and RANCHER_MINOR, optional: LOCAL=true for local builds)

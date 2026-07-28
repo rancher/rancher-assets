@@ -1,6 +1,11 @@
 # Automation Items
 
-Add back to release.yml
+Add back to release.yml and complete workflow once ready to automate.
+
+TODO:
+- Script to bump build.yaml charts image version/unRC it
+- Script/wrapper to call `go generate` in `r/r` correctly
+- (Optional) Auto unRC of chart deps in `build.yaml`
 
 
 ```
@@ -25,6 +30,9 @@ Add back to release.yml
           RANCHER_BRANCH=$(yq eval ".chart-versions.\"${RANCHER_MINOR}\".rancher-branch" config.yaml)
           echo "branch=$RANCHER_BRANCH" >> $GITHUB_OUTPUT
 
+      # TODO generate actual PR changes
+      # Consider updating all charts refs to unRC at the same time
+
       - name: Create PR to rancher/rancher
         run: |
           VERSION="${{ needs.parse-tag.outputs.version }}"
@@ -41,5 +49,4 @@ Add back to release.yml
             --body "$PR_BODY"
         env:
           GH_TOKEN: ${{ env.GH_APP_TOKEN }}
-
 ```
