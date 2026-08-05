@@ -8,18 +8,6 @@ base-image:
   bci-micro: "16.0@sha256:0a1b2222f55d4505ff50b9355a1877b07b5e442d7fd6efdc44b907cb0dd9572d"
 
 chart-versions:
-  # Rancher 2.14.x
-  "2.14":
-    rancher-branch: release/v2.14
-    prod:
-      charts-branch: release-v2.14
-      partner-branch: main
-      rke2-branch: main
-    dev:
-      charts-branch: dev-v2.14
-      partner-branch: main
-      rke2-branch: main
-
   # Rancher 2.15.x
   "2.15":
     rancher-branch: release/v2.15
