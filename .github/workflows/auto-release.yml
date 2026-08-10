@@ -66,8 +66,8 @@ jobs:
         run: |
           git remote set-url origin "https://oauth2:${{ env.GH_APP_TOKEN }}@github.com/${{ github.repository }}.git"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "eio-github-actions-power-enhancer[bot]"
+          git config user.email "eio-github-actions-power-enhancer[bot]@users.noreply.github.com"
 
       - name: Create tags for each Dockerfile
         if: steps.detect.outputs.has_changes == 'true'
