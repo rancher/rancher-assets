@@ -23,67 +23,74 @@ jobs:
           secrets: |
             github/token/rancher--rancher-assets--contents--write token | GH_APP_TOKEN;
 
-      - name: Diagnostic - GitHub App Identity
+      - name: Test Tag Creation and Push Authentication
         run: |
-         echo "=================== DIAGNOSTIC MODE ==================="
-         echo ""
-         echo "🔍 Checking GitHub App Token..."
-      
-         # Check token format
-         TOKEN_PREFIX="${GH_APP_TOKEN:0:4}"
-         TOKEN_LENGTH="${#GH_APP_TOKEN}"
-         echo "Token prefix: ${TOKEN_PREFIX}..."
-         echo "Token length: ${TOKEN_LENGTH} characters"
-      
-         if [[ "$TOKEN_PREFIX" == "ghs_" ]]; then
-           echo "✅ Token format: GitHub App installation token"
-         fi
-      
-         echo ""
-         echo "🔍 Querying GitHub API for installation details..."
-      
-         # For GitHub App tokens, use the /app endpoint (requires app-level permissions)
-         # Or use the installation endpoint
-         INSTALLATION_INFO=$(curl -s -H "Authorization: Bearer ${GH_APP_TOKEN}" \
+          echo "=================== TESTING TAG PUSH ==================="
+          echo ""
+          
+          # Create a test tag
+          TEST_TAG="debug-test-$(date +%s)"
+          echo "Creating test tag: $TEST_TAG"
+          
+          # Configure git identity
+          git config user.name "eio-github-actions-power-enhancer[bot]"
+          git config user.email "eio-github-actions-power-enhancer[bot]@users.noreply.github.com"
+          
+          # Create annotated tag
+          git tag -a "$TEST_TAG" -m "Debug test tag from workflow"
+          
+          echo "✅ Tag created locally"
+          echo ""
+          
+          # Test 1: Push using remote name (current method)
+          echo "📤 Test 1: Push using git remote (current method)"
+          git remote set-url origin "https://oauth2:${{ env.GH_APP_TOKEN }}@github.com/${{ github.repository }}.git"
+          git push origin "$TEST_TAG" || echo "Push failed!"
+          
+          echo ""
+          sleep 5  # Give GitHub time to process
+          
+          # Check who GitHub thinks pushed it
+          echo "🔍 Checking push actor via GitHub API..."
+          EVENTS=$(curl -s \
+           -H "Authorization: Bearer ${{ env.GH_APP_TOKEN }}" \
            -H "Accept: application/vnd.github+json" \
-           https://api.github.com/installation/repositories)
-      
-         echo "Installation repositories:"
-         echo "$INSTALLATION_INFO" | jq '{total_count, repositories: [.repositories[]? | {name, full_name}]}'
-      
-         # Try to get app information from a different endpoint
-         echo ""
-         echo "🔍 Getting app information from authenticated endpoint..."
-      
-         # Try the app-installations endpoint
-         APP_INFO=$(curl -s -H "Authorization: Bearer ${GH_APP_TOKEN}" \
+           "https://api.github.com/repos/${{ github.repository }}/events" \
+           | jq '.[] | select(.type == "CreateEvent") | select(.payload.ref_type == "tag") | select(.payload.ref == "'"$TEST_TAG"'") | .actor.login')
+          
+          echo "Tag '$TEST_TAG' was pushed by actor: $EVENTS"
+          
+          if [[ "$EVENTS" == "\"eio-github-actions-power-enhancer[bot]\"" ]]; then
+           echo "✅ SUCCESS: GitHub App token was used!"
+          elif [[ "$EVENTS" == "\"github-actions[bot]\"" ]]; then
+           echo "❌ FAIL: GITHUB_TOKEN was used instead of App token"
+          else
+           echo "⚠️  UNKNOWN: Actor is $EVENTS"
+          fi
+          
+          echo ""
+          echo "🔍 Checking if any workflows were triggered..."
+          sleep 10  # Give workflows time to start
+          
+          TRIGGERED_RUNS=$(curl -s \
+           -H "Authorization: Bearer ${{ env.GH_APP_TOKEN }}" \
            -H "Accept: application/vnd.github+json" \
-           https://api.github.com/app)
-      
-         echo "GitHub App details:"
-         echo "$APP_INFO" | jq '{name, slug, owner: .owner.login}'
-      
-         APP_SLUG=$(echo "$APP_INFO" | jq -r '.slug // empty')
-         APP_NAME=$(echo "$APP_INFO" | jq -r '.name // empty')
-      
-         echo ""
-         echo "========== RECOMMENDATION =========="
-         if [[ -n "$APP_SLUG" && "$APP_SLUG" != "null" ]]; then
-           echo "✅ GitHub App identified: $APP_NAME"
-           echo "   Slug: $APP_SLUG"
-           echo ""
-           echo "Recommended git identity for auto-release workflow:"
-           echo "  git config user.name \"${APP_SLUG}[bot]\""
-           echo "  git config user.email \"${APP_SLUG}[bot]@users.noreply.github.com\""
-         else
-           echo "ℹ️  Could not determine app slug from API"
-           echo ""
-           echo "Try checking the git commits made by this app in other repos,"
-           echo "or contact your team to identify which GitHub App this token belongs to."
-         fi
-         echo "===================================="
-      
-         echo ""
-         echo "Diagnostic complete. No tags created."
+           "https://api.github.com/repos/${{ github.repository }}/actions/runs?event=push&created=>$(date -u -v-1M '+%Y-%m-%dT%H:%M:%SZ')" \
+           | jq '.workflow_runs[] | select(.head_branch == "'"$TEST_TAG"'") | {name, status, conclusion}')
+          
+          if [[ -z "$TRIGGERED_RUNS" ]]; then
+           echo "❌ No workflows triggered by this tag"
+          else
+           echo "✅ Workflows triggered:"
+           echo "$TRIGGERED_RUNS"
+          fi
+          
+          echo ""
+          echo "Cleaning up test tag..."
+          git push origin --delete "$TEST_TAG" || echo "Cleanup failed (tag may not exist remotely)"
+          git tag -d "$TEST_TAG"
+          
+          echo ""
+          echo "===================================="
         env:
-          GH_APP_TOKEN: ${{ env.GH_APP_TOKEN }}
+         GH_APP_TOKEN: ${{ env.GH_APP_TOKEN }}
