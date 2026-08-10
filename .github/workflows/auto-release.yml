@@ -126,7 +126,9 @@ jobs:
 
           for tag in $TAGS; do
             echo "Triggering release for tag: $tag"
-            gh workflow run release.yml --ref "$tag"
+            gh workflow run release.yml \
+              --ref "$tag" \
+              --field tag="$tag"
           done
 
           echo ""

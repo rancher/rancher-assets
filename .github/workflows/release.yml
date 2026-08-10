@@ -5,6 +5,11 @@ name: Build and Release
 on:
   # Triggered manually by auto-release workflow (one run per tag)
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and release'
+        required: false
+        type: string
   # Also triggered by manually created tag pushes
   push:
     tags:
@@ -34,7 +39,13 @@ jobs:
       - name: Parse CalVer tag
         id: parse
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          # Get version from either workflow_dispatch input or tag push
+          if [[ -n "${{ inputs.tag }}" ]]; then
+            VERSION="${{ inputs.tag }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
+
           echo "Parsing tag: $VERSION"
 
           # CalVer format: v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]
