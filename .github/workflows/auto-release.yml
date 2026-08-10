@@ -13,7 +13,6 @@ on:
 
 permissions:
   contents: write  # Needed to create and push tags
-  id-token: write  # this is important, it's how we authenticate with Vault
 
 jobs:
   detect-and-tag:
@@ -23,7 +22,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0  # Need full history to detect changes
-          persist-credentials: false # Prevent git from ignoring the oauth token
 
       - name: Detect changed Dockerfiles
         id: detect
@@ -55,19 +53,11 @@ jobs:
           echo "No Dockerfiles changed - skipping tag creation"
           exit 0
 
-      - name: "Read vault secrets"
-        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
-        with:
-          secrets: |
-            github/token/rancher--rancher-assets--contents--write token | GH_APP_TOKEN;
-
-      - name: Configure git to use GitHub App token
+      - name: Configure git
         if: steps.detect.outputs.has_changes == 'true'
         run: |
-          git remote set-url origin "https://oauth2:${{ env.GH_APP_TOKEN }}@github.com/${{ github.repository }}.git"
-
-          git config user.name "eio-github-actions-power-enhancer[bot]"
-          git config user.email "eio-github-actions-power-enhancer[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Create tags for each Dockerfile
         if: steps.detect.outputs.has_changes == 'true'
@@ -126,6 +116,23 @@ jobs:
 
           echo ""
           echo "All tags pushed successfully"
+
+      - name: Trigger release workflow for each tag
+        if: steps.detect.outputs.has_changes == 'true'
+        run: |
+          echo "Triggering release workflow for each tag..."
+
+          TAGS=$(git tag --points-at ${{ github.sha }})
+
+          for tag in $TAGS; do
+            echo "Triggering release for tag: $tag"
+            gh workflow run release.yml --ref "$tag"
+          done
+
+          echo ""
+          echo "All release workflows triggered successfully"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Summary
         if: steps.detect.outputs.has_changes == 'true'

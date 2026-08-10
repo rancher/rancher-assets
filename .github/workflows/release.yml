@@ -3,6 +3,9 @@ name: Build and Release
 # Tier 2 Workflow: Triggered by (CalVer) tags to build and push Docker images
 
 on:
+  # Triggered manually by auto-release workflow (one run per tag)
+  workflow_dispatch:
+  # Also triggered by manually created tag pushes
   push:
     tags:
       - 'v*'
