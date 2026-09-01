@@ -103,6 +103,11 @@ generate: ## Run go generate to update generated code.
 	@echo "Generating Dockerfiles and updating lock.yaml..."
 	$(RUN) go run main.go generate
 
+.PHONY: update
+update: ## Run go generate to update generated code.
+	@echo "Updating chart refs, then generating Dockerfiles and updating lock.yaml..."
+	$(RUN) go run main.go generate -update
+
 .PHONY: vendor-update
 vendor-update: ## Update Go dependencies and vendor them
 	@./scripts/vendor-update.sh

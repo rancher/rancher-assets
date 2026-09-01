@@ -37,30 +37,30 @@ chart-versions:
         upstream-refs:
             prod:
                 charts:
-                    fetched-at: 2026-08-14T13:43:41.094485Z
+                    fetched-at: 2026-09-01T01:08:50.945058523Z
                     branch: release-v2.15
-                    commit: ab0a7acd14cdf48882844390bc2caf8d4cce356e
+                    commit: f269ccf4c0a4b27cf49501fca3407e35f6a5b964
                 partner:
-                    fetched-at: 2026-08-14T13:43:41.289155Z
+                    fetched-at: 2026-09-01T01:08:51.173849732Z
                     branch: main
-                    commit: ca7119ca9b124db3f9fec1fef625ebcc0db01143
+                    commit: 0f10955aa221bd2523758e9d5673e4f253d80416
                 rke2:
-                    fetched-at: 2026-08-14T13:43:41.468565Z
+                    fetched-at: 2026-09-01T01:08:51.404587357Z
                     branch: main
-                    commit: cdcf0b9e3cc4a6b17a0ffe5b9cd5c1cb0bd210ee
+                    commit: da4b34e428dc9e36f1dcd5af621278f03ecdccaa
             dev:
                 charts:
-                    fetched-at: 2026-08-14T13:43:41.63075Z
+                    fetched-at: 2026-09-01T01:08:51.639780148Z
                     branch: dev-v2.15
-                    commit: 380369f4d7acedf0dff0e2e0792cfa164d598765
+                    commit: 616a1dfb4dd882fbde6552f6537031baf3f1d09e
                 partner:
-                    fetched-at: 2026-08-14T13:43:41.795865Z
+                    fetched-at: 2026-09-01T01:08:51.887388065Z
                     branch: main
-                    commit: ca7119ca9b124db3f9fec1fef625ebcc0db01143
+                    commit: 0f10955aa221bd2523758e9d5673e4f253d80416
                 rke2:
-                    fetched-at: 2026-08-14T13:43:41.976276Z
+                    fetched-at: 2026-09-01T01:08:52.03681444Z
                     branch: main
-                    commit: cdcf0b9e3cc4a6b17a0ffe5b9cd5c1cb0bd210ee
+                    commit: da4b34e428dc9e36f1dcd5af621278f03ecdccaa
     "2.16":
         latest-stable: null
         latest-prerelease: null
@@ -68,30 +68,30 @@ chart-versions:
         upstream-refs:
             prod:
                 charts:
-                    fetched-at: 2026-08-14T13:43:42.326808Z
+                    fetched-at: 2026-09-01T01:08:52.191283357Z
                     branch: release-v2.16
-                    commit: 3587dd1b5ef3f56f8fd22c7ceffeca532107c532
+                    commit: 1abf6ec8303720ab58c57e934b4133f8807361d7
                 partner:
-                    fetched-at: 2026-08-14T13:43:42.495958Z
+                    fetched-at: 2026-09-01T01:08:52.452403857Z
                     branch: main
-                    commit: ca7119ca9b124db3f9fec1fef625ebcc0db01143
+                    commit: 0f10955aa221bd2523758e9d5673e4f253d80416
                 rke2:
-                    fetched-at: 2026-08-14T13:43:42.721362Z
+                    fetched-at: 2026-09-01T01:08:52.606172566Z
                     branch: main
-                    commit: cdcf0b9e3cc4a6b17a0ffe5b9cd5c1cb0bd210ee
+                    commit: da4b34e428dc9e36f1dcd5af621278f03ecdccaa
             dev:
                 charts:
-                    fetched-at: 2026-08-14T13:43:42.891381Z
+                    fetched-at: 2026-09-01T01:08:52.771955899Z
                     branch: dev-v2.16
-                    commit: 6c88d79163e64cc3a76952e9ab37c52c7bfdc78a
+                    commit: 8c2e2a567cd3811d4ac8faf6d00e19989865cf75
                 partner:
-                    fetched-at: 2026-08-14T13:43:43.104399Z
+                    fetched-at: 2026-09-01T01:08:52.970614691Z
                     branch: main
-                    commit: ca7119ca9b124db3f9fec1fef625ebcc0db01143
+                    commit: 0f10955aa221bd2523758e9d5673e4f253d80416
                 rke2:
-                    fetched-at: 2026-08-14T13:43:43.307106Z
+                    fetched-at: 2026-09-01T01:08:53.360975733Z
                     branch: main
-                    commit: cdcf0b9e3cc4a6b17a0ffe5b9cd5c1cb0bd210ee
+                    commit: da4b34e428dc9e36f1dcd5af621278f03ecdccaa
 base-image:
     bci-base: 16.0@sha256:c121aa8f01348b602e5b29b3e868693de3917cc15ab4735fcbd013ea159c426f
     bci-micro: 16.0@sha256:0a1b2222f55d4505ff50b9355a1877b07b5e442d7fd6efdc44b907cb0dd9572d
@@ -99,5 +99,5 @@ copy-script-hash: 9b9da8e26b3377be489743e5f7164394e3fb3c67ea134cb629ba1904f8cd80
 template-hashes:
     prod-template: 0cf523783cb5d391cf9478f453bf1ce88599256dc3192b27c1c80774c49efa40
     dev-template: 6f2d670e49909f20a274718cd8a9a0e1f5af5ebbce912ae515a337183ac4e6ec
-generated-at: 2026-08-14T13:43:43.307154Z
+generated-at: 2026-09-01T01:08:53.361013816Z
 generator-version: v0.1.0
