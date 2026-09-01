@@ -3,21 +3,63 @@ name: Push to rancher/rancher
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'rancher-assets tag to sync (e.g. v2.16-20260901T1200Z)'
+      git_ref:
+        description: 'Git ref (commit SHA, tag, or branch)'
+        required: true
+        type: string
+      rancher_minor:
+        description: 'Rancher minor version (e.g., 2.16)'
         required: true
         type: string
   workflow_call:
     inputs:
-      tag:
-        description: 'rancher-assets tag to sync'
+      git_ref:
+        description: 'Git ref (commit SHA, tag, or branch)'
         required: true
         type: string
+      rancher_minor:
+        description: 'Rancher minor version (e.g., 2.16)'
+        required: true
+        type: string
+  release:
+    types: [published]
 
 jobs:
+  parse-release:
+    name: Parse release tag
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    outputs:
+      git_ref: ${{ steps.parse.outputs.ref }}
+      rancher_minor: ${{ steps.parse.outputs.minor }}
+    steps:
+      - name: Parse release tag
+        id: parse
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          echo "Parsing release tag: $TAG"
+
+          # Extract minor version from tag (v2.16-20260901T1200Z[-dev] -> 2.16)
+          MINOR=$(echo "$TAG" | sed -nE 's/^v?([0-9]+\.[0-9]+)-.*/\1/p')
+
+          if [ -z "$MINOR" ]; then
+            echo "ERROR: Could not extract minor version from tag: $TAG"
+            exit 1
+          fi
+
+          echo "ref=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "minor=$MINOR" >> $GITHUB_OUTPUT
+          echo "Extracted: ref=${{ github.sha }}, minor=$MINOR"
+
   push-to-rancher:
     name: Push to rancher/rancher
+    needs: [parse-release]
+    if: always() && !cancelled() && (github.event_name != 'release' || needs.parse-release.result == 'success')
     runs-on: ubuntu-latest
+    # Prevent duplicate runs for same commit+minor (when both dev and stable tags trigger)
+    concurrency:
+      group: push-to-rancher-${{ needs.parse-release.outputs.git_ref || inputs.git_ref }}-${{ needs.parse-release.outputs.rancher_minor || inputs.rancher_minor }}
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
