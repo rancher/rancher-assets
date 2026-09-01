@@ -1,0 +1,51 @@
+name: PR Builder Cron
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 11 * * 1-5' # Runs at 11:00 UTC Monday through Friday
+
+jobs:
+  bump-pr-builder:
+    name: Bump Chart References
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    container:
+      image: ghcr.io/rancher/ci-image/go1.26
+    steps:
+      - name: Read GitHub App Credentials from Vault
+        if: github.repository == 'rancher/rancher-assets'
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APP_ID ;
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
+
+      - name: Generate GitHub App Token
+        if: github.repository == 'rancher/rancher-assets'
+        id: generate_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.PRIVATE_KEY }}
+          repositories: |
+            rancher-assets
+
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          token: ${{ steps.generate_token.outputs.token }}
+          persist-credentials: true
+
+      - name: Run bump-pr-builder
+        if: github.repository == 'rancher/rancher-assets'
+        env:
+          CI: true
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+          APP_USER: "${{ steps.generate_token.outputs.app-slug }}[bot]"
+          SOURCE_REPO: ${{ github.repository }}
+          REPO_DIR: ${{ github.workspace }}
+        run: ./.github/workflows/bump-pr-builder/run-gha.sh
