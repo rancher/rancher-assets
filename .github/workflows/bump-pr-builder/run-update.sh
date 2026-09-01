@@ -23,22 +23,22 @@ fi
 
 summary "  ✓ make update completed"
 
-# Check if there are any changes using scripts/verify
-# scripts/verify exits with 1 if there are changes (opposite of what we want)
+# Check if there are any changes in generated files
 summary ""
 summary "## Checking for changes"
 
-VERIFY_EXIT=0
-(cd "$REPO_DIR" && ./scripts/verify) || VERIFY_EXIT=$?
+# Refresh git index to avoid false positives
+git -C "$REPO_DIR" update-index --refresh >/dev/null 2>&1 || true
 
-if [ "$VERIFY_EXIT" -eq 0 ]; then
+# Check for changes in generated files (dockerfiles/ and lock.yaml)
+if [ -z "$(git -C "$REPO_DIR" status --porcelain dockerfiles/ lock.yaml)" ]; then
   # No changes detected
   summary "  ℹ️  No changes detected - repository is up to date"
   exit 2
 fi
 
 # Changes detected
-summary "  ✓ Changes detected"
+summary "  ✓ Changes detected in generated files:"
 git -C "$REPO_DIR" status --porcelain dockerfiles/ lock.yaml | sed 's/^/    /'
 
 exit 0
