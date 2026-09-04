@@ -2,6 +2,12 @@ name: PR Builder Cron
 
 on:
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Target branch for PR'
+        required: false
+        default: 'main'
+        type: string
   schedule:
     - cron: '0 11 * * 1-5' # Runs at 11:00 UTC Monday through Friday
 
@@ -16,6 +22,12 @@ jobs:
     container:
       image: ghcr.io/rancher/ci-image/go1.26
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
       - name: Read GitHub App Token from Vault
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         if: github.repository == 'rancher/rancher-assets'
@@ -26,6 +38,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          path: target-repo
+          ref: ${{ inputs.target_branch || 'main' }}
           fetch-depth: 0
           token: ${{ env.GH_APP_TOKEN }}
           persist-credentials: true
@@ -37,5 +51,5 @@ jobs:
           GH_TOKEN: ${{ env.GH_APP_TOKEN }}
           APP_USER: "eio-github-actions-power-enhancer[bot]"
           SOURCE_REPO: ${{ github.repository }}
-          REPO_DIR: ${{ github.workspace }}
+          REPO_DIR: "${{ github.workspace }}/target-repo"
         run: ./.github/workflows/bump-pr-builder/run-gha.sh
