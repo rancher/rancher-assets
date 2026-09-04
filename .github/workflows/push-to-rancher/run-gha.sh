@@ -38,10 +38,23 @@ summary "- Target branches: \`$FILTERED_BRANCHES\`"
 summary ""
 
 # Validate image exists before proceeding
-validate_image_exists "$TAG"
+if ! validate_image_exists "$TAG"; then
+  summary "## ERROR: Image validation failed"
+  summary "Cannot proceed - image must be published first"
+  exit 1
+fi
 
 # Configure git identity for commits (GHA only - fresh clone deleted at workflow end)
-user_id=$(gh api "/users/$APP_USER" --jq .id)
+log "Fetching user ID for $APP_USER..."
+user_id=$(gh api "/users/$APP_USER" --jq .id 2>&1) || {
+  summary "## ERROR: Failed to fetch user ID"
+  summary '```'
+  summary "$user_id"
+  summary '```'
+  exit 1
+}
+log "  ✓ User ID: $user_id"
+
 git -C "$RANCHER_DIR" config user.name "$APP_USER"
 git -C "$RANCHER_DIR" config user.email "${user_id}+${APP_USER}@users.noreply.github.com"
 
