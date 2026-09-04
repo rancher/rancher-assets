@@ -1,6 +1,9 @@
 name: Push to rancher/rancher
 
 on:
+  release:
+    types: [ published ]
+  # Remove the following ones after we confirm release triggers will work
   workflow_dispatch:
     inputs:
       git_ref:
@@ -21,8 +24,6 @@ on:
         description: 'Rancher minor version (e.g., 2.16)'
         required: true
         type: string
-  release:
-    types: [published]
 
 jobs:
   parse-release:
