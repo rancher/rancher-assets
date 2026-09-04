@@ -3,14 +3,6 @@ name: Build and Release
 # Tier 2 Workflow: Triggered by (CalVer) tags to build and push Docker images
 
 on:
-  # Triggered manually by auto-release workflow (one run per tag)
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag to build and release'
-        required: false
-        type: string
-  # Also triggered by manually created tag pushes
   push:
     tags:
       - 'v*'
@@ -39,13 +31,7 @@ jobs:
       - name: Parse CalVer tag
         id: parse
         run: |
-          # Get version from either workflow_dispatch input or tag push
-          if [[ -n "${{ inputs.tag }}" ]]; then
-            VERSION="${{ inputs.tag }}"
-          else
-            VERSION=${GITHUB_REF#refs/tags/}
-          fi
-
+          VERSION=${GITHUB_REF#refs/tags/}
           echo "Parsing tag: $VERSION"
 
           # CalVer format: v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]
