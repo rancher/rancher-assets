@@ -210,6 +210,12 @@ jobs:
             --tag-message "${{ steps.tag_message.outputs.message }}" \
             > /tmp/release-notes.md
 
+      - name: Read Vault App token for release publishing
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        with:
+          secrets: |
+            github/token/rancher--rancher-assets--contents--write token | APP_TOKEN
+
       - name: Publish release (undraft)
         if: success()
         run: |
@@ -219,4 +225,4 @@ jobs:
             --notes-file /tmp/release-notes.md
           echo "Release $VERSION published successfully!"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ env.APP_TOKEN }}
