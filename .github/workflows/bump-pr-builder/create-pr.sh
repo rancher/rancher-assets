@@ -37,11 +37,19 @@ and regenerated Dockerfiles and lock.yaml.
 Automation: bump-pr-builder
 Created-by: rancher-assets-bump-automation"
 
-if ! commit_if_changed "$COMMIT_MSG"; then
+COMMIT_EXIT=0
+commit_if_changed "$COMMIT_MSG" || COMMIT_EXIT=$?
+
+if [ $COMMIT_EXIT -eq 1 ]; then
   summary "  ℹ️  No changes to commit (unexpected - should have been caught earlier)"
   git -C "$REPO_DIR" checkout -f "$TARGET_BRANCH"
   git -C "$REPO_DIR" branch -D "$BRANCH_NAME" || true
   exit 2
+elif [ $COMMIT_EXIT -ne 0 ]; then
+  summary "  ✗ Failed to commit changes (exit code: $COMMIT_EXIT)"
+  git -C "$REPO_DIR" checkout -f "$TARGET_BRANCH"
+  git -C "$REPO_DIR" branch -D "$BRANCH_NAME" || true
+  exit 1
 fi
 
 summary "  ✓ Changes committed"
@@ -86,6 +94,9 @@ if [ -z "$REPO_OWNER_NAME" ]; then
   REPO_OWNER_NAME=$(git -C "$REPO_DIR" remote get-url "$REMOTE" | sed -e 's|.*github.com[:/]||' -e 's|\.git$||')
 fi
 
+log "  - Running: gh pr create --repo $REPO_OWNER_NAME --base $TARGET_BRANCH --head $BRANCH_NAME"
+
+# Try creating PR with label first
 PR_OUTPUT=$(gh pr create \
   --repo "$REPO_OWNER_NAME" \
   --base "$TARGET_BRANCH" \
@@ -94,15 +105,35 @@ PR_OUTPUT=$(gh pr create \
   --body "$PR_BODY" \
   --label "status/auto-created" 2>&1)
 
-if [ $? -eq 0 ]; then
+PR_EXIT=$?
+
+# If label fails, try without it
+if [ $PR_EXIT -ne 0 ] && echo "$PR_OUTPUT" | grep -qi "label.*not found\|invalid.*label"; then
+  log "  - Label 'status/auto-created' not found, retrying without label..."
+  PR_OUTPUT=$(gh pr create \
+    --repo "$REPO_OWNER_NAME" \
+    --base "$TARGET_BRANCH" \
+    --head "$BRANCH_NAME" \
+    --title "Bump chart references and update generated files" \
+    --body "$PR_BODY" 2>&1)
+  PR_EXIT=$?
+fi
+
+if [ $PR_EXIT -eq 0 ]; then
   PR_URL=$(echo "$PR_OUTPUT" | tail -1)
   summary "  ✓ PR created: $PR_URL"
   summary ""
   summary "## Pull Request Created"
   summary "$PR_URL"
 else
-  summary "  ✗ Failed to create PR"
-  echo "$PR_OUTPUT" | sed 's/^/    /' >&2
+  summary "  ✗ Failed to create PR (exit code: $PR_EXIT)"
+  summary ""
+  summary "### Error Output:"
+  summary '```'
+  echo "$PR_OUTPUT" | while IFS= read -r line; do
+    summary "$line"
+  done
+  summary '```'
   git -C "$REPO_DIR" checkout -f "$TARGET_BRANCH"
   exit 1
 fi
