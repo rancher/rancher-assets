@@ -12,8 +12,8 @@ on:
       - 'lock.yaml'
 
 permissions:
-  contents: write  # Needed to create and push tags
-  actions: write   # Needed to trigger release workflow
+  contents: write
+  id-token: write # required for OIDC -> Vault
 
 jobs:
   detect-and-tag:
@@ -54,11 +54,26 @@ jobs:
           echo "No Dockerfiles changed - skipping tag creation"
           exit 0
 
-      - name: Configure git
+      - name: Read Vault App token
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        with:
+          secrets: |
+            github/token/rancher--rancher-assets--contents--write token | APP_TOKEN
+
+      - name: Switch Git CLI to Vault App Token
+        run: |
+          # 1. Unset default extraheader from actions/checkout
+          git config --local --unset http.https://github.com/.extraheader
+          
+          # 2. Set new authorization extraheader using the Vault token
+          TOKEN_B64=$(echo -n "x-access-token:${{ steps.vault.outputs.APP_TOKEN }}" | base64 -w 0)
+          git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${TOKEN_B64}"
+
+      - name: Configure git bot identity
         if: steps.detect.outputs.has_changes == 'true'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "eio-github-actions-power-enhancer[bot]"
+          git config user.email "860038+eio-github-actions-power-enhancer[bot]@users.noreply.github.com"
 
       - name: Create tags for each Dockerfile
         if: steps.detect.outputs.has_changes == 'true'
@@ -117,25 +132,6 @@ jobs:
 
           echo ""
           echo "All tags pushed successfully"
-
-      - name: Trigger release workflow for each tag
-        if: steps.detect.outputs.has_changes == 'true'
-        run: |
-          echo "Triggering release workflow for each tag..."
-
-          TAGS=$(git tag --points-at ${{ github.sha }})
-
-          for tag in $TAGS; do
-            echo "Triggering release for tag: $tag"
-            gh workflow run release.yml \
-              --ref "$tag" \
-              --field tag="$tag"
-          done
-
-          echo ""
-          echo "All release workflows triggered successfully"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Summary
         if: steps.detect.outputs.has_changes == 'true'
