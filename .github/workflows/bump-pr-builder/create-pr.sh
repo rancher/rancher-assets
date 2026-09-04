@@ -62,8 +62,18 @@ fi
 
 # Push branch
 log "  - Pushing branch \`$BRANCH_NAME\`"
-if ! git -C "$REPO_DIR" push -u "$REMOTE" "$BRANCH_NAME"; then
-  summary "  ✗ Failed to push branch"
+PUSH_OUTPUT=$(git -C "$REPO_DIR" push -u "$REMOTE" "$BRANCH_NAME" 2>&1)
+PUSH_EXIT=$?
+
+if [ $PUSH_EXIT -ne 0 ]; then
+  summary "  ✗ Failed to push branch (exit code: $PUSH_EXIT)"
+  summary ""
+  summary "### Error Output:"
+  summary '```'
+  echo "$PUSH_OUTPUT" | while IFS= read -r line; do
+    summary "$line"
+  done
+  summary '```'
   git -C "$REPO_DIR" checkout -f "$TARGET_BRANCH"
   exit 1
 fi
