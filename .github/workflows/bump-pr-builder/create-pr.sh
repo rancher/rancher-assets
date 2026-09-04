@@ -106,46 +106,50 @@ fi
 
 log "  - Running: gh pr create --repo $REPO_OWNER_NAME --base $TARGET_BRANCH --head $BRANCH_NAME"
 
-# Try creating PR with label first
-PR_OUTPUT=$(gh pr create \
+# Debug: check gh auth status
+log "  - Checking gh auth status..."
+gh auth status 2>&1 | head -5
+
+# Just run it directly - let errors print naturally
+echo ""
+echo "Attempting to create PR..."
+set +e  # Don't exit on error, we want to see the output
+
+gh pr create \
   --repo "$REPO_OWNER_NAME" \
   --base "$TARGET_BRANCH" \
   --head "$BRANCH_NAME" \
   --title "Bump chart references and update generated files" \
   --body "$PR_BODY" \
-  --label "status/auto-created" 2>&1)
+  --label "status/auto-created"
 
 PR_EXIT=$?
+set -e
 
-# If label fails, try without it
-if [ $PR_EXIT -ne 0 ] && echo "$PR_OUTPUT" | grep -qi "label.*not found\|invalid.*label"; then
-  log "  - Label 'status/auto-created' not found, retrying without label..."
-  PR_OUTPUT=$(gh pr create \
+if [ $PR_EXIT -eq 0 ]; then
+  summary "  ✓ PR created successfully"
+else
+  echo ""
+  echo "ERROR: gh pr create failed with exit code $PR_EXIT"
+  echo "Retrying without label..."
+
+  set +e
+  gh pr create \
     --repo "$REPO_OWNER_NAME" \
     --base "$TARGET_BRANCH" \
     --head "$BRANCH_NAME" \
     --title "Bump chart references and update generated files" \
-    --body "$PR_BODY" 2>&1)
-  PR_EXIT=$?
-fi
+    --body "$PR_BODY"
 
-if [ $PR_EXIT -eq 0 ]; then
-  PR_URL=$(echo "$PR_OUTPUT" | tail -1)
-  summary "  ✓ PR created: $PR_URL"
-  summary ""
-  summary "## Pull Request Created"
-  summary "$PR_URL"
-else
-  summary "  ✗ Failed to create PR (exit code: $PR_EXIT)"
-  summary ""
-  summary "### Error Output:"
-  summary '```'
-  echo "$PR_OUTPUT" | while IFS= read -r line; do
-    summary "$line"
-  done
-  summary '```'
-  git -C "$REPO_DIR" checkout -f "$TARGET_BRANCH"
-  exit 1
+  PR_EXIT=$?
+  set -e
+
+  if [ $PR_EXIT -ne 0 ]; then
+    echo ""
+    echo "ERROR: PR creation failed even without label (exit code: $PR_EXIT)"
+    git -C "$REPO_DIR" checkout -f "$TARGET_BRANCH"
+    exit 1
+  fi
 fi
 
 # Return to target branch
