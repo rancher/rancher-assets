@@ -29,7 +29,16 @@ summary "- Target branch: \`${TARGET_BRANCH:-<current>}\`"
 summary ""
 
 # Configure git identity for commits (GHA only - CI environment)
-user_id=$(gh api "/users/$APP_USER" --jq .id)
+log "Fetching user ID for $APP_USER..."
+user_id=$(gh api "/users/$APP_USER" --jq .id 2>&1) || {
+  summary "## ERROR: Failed to fetch user ID"
+  summary '```'
+  summary "$user_id"
+  summary '```'
+  exit 1
+}
+log "  ✓ User ID: $user_id"
+
 git -C "$REPO_DIR" config user.name "$APP_USER"
 git -C "$REPO_DIR" config user.email "${user_id}+${APP_USER}@users.noreply.github.com"
 

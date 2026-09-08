@@ -37,11 +37,19 @@ and regenerated Dockerfiles and lock.yaml.
 Automation: bump-pr-builder
 Created-by: rancher-assets-bump-automation"
 
-if ! commit_if_changed "$COMMIT_MSG"; then
+COMMIT_EXIT=0
+commit_if_changed "$COMMIT_MSG" || COMMIT_EXIT=$?
+
+if [ $COMMIT_EXIT -eq 1 ]; then
   summary "  ℹ️  No changes to commit (unexpected - should have been caught earlier)"
   git -C "$REPO_DIR" checkout -f "$TARGET_BRANCH"
   git -C "$REPO_DIR" branch -D "$BRANCH_NAME" || true
   exit 2
+elif [ $COMMIT_EXIT -ne 0 ]; then
+  summary "  ✗ Failed to commit changes (exit code: $COMMIT_EXIT)"
+  git -C "$REPO_DIR" checkout -f "$TARGET_BRANCH"
+  git -C "$REPO_DIR" branch -D "$BRANCH_NAME" || true
+  exit 1
 fi
 
 summary "  ✓ Changes committed"
@@ -54,8 +62,18 @@ fi
 
 # Push branch
 log "  - Pushing branch \`$BRANCH_NAME\`"
-if ! git -C "$REPO_DIR" push -u "$REMOTE" "$BRANCH_NAME"; then
-  summary "  ✗ Failed to push branch"
+PUSH_OUTPUT=$(git -C "$REPO_DIR" push -u "$REMOTE" "$BRANCH_NAME" 2>&1)
+PUSH_EXIT=$?
+
+if [ $PUSH_EXIT -ne 0 ]; then
+  summary "  ✗ Failed to push branch (exit code: $PUSH_EXIT)"
+  summary ""
+  summary "### Error Output:"
+  summary '```'
+  echo "$PUSH_OUTPUT" | while IFS= read -r line; do
+    summary "$line"
+  done
+  summary '```'
   git -C "$REPO_DIR" checkout -f "$TARGET_BRANCH"
   exit 1
 fi
@@ -86,25 +104,52 @@ if [ -z "$REPO_OWNER_NAME" ]; then
   REPO_OWNER_NAME=$(git -C "$REPO_DIR" remote get-url "$REMOTE" | sed -e 's|.*github.com[:/]||' -e 's|\.git$||')
 fi
 
-PR_OUTPUT=$(gh pr create \
+log "  - Running: gh pr create --repo $REPO_OWNER_NAME --base $TARGET_BRANCH --head $BRANCH_NAME"
+
+# Debug: check gh auth status
+log "  - Checking gh auth status..."
+gh auth status 2>&1 | head -5
+
+# Just run it directly - let errors print naturally
+echo ""
+echo "Attempting to create PR..."
+set +e  # Don't exit on error, we want to see the output
+
+gh pr create \
   --repo "$REPO_OWNER_NAME" \
   --base "$TARGET_BRANCH" \
   --head "$BRANCH_NAME" \
   --title "Bump chart references and update generated files" \
   --body "$PR_BODY" \
-  --label "status/auto-created" 2>&1)
+  --label "status/auto-created"
 
-if [ $? -eq 0 ]; then
-  PR_URL=$(echo "$PR_OUTPUT" | tail -1)
-  summary "  ✓ PR created: $PR_URL"
-  summary ""
-  summary "## Pull Request Created"
-  summary "$PR_URL"
+PR_EXIT=$?
+set -e
+
+if [ $PR_EXIT -eq 0 ]; then
+  summary "  ✓ PR created successfully"
 else
-  summary "  ✗ Failed to create PR"
-  echo "$PR_OUTPUT" | sed 's/^/    /' >&2
-  git -C "$REPO_DIR" checkout -f "$TARGET_BRANCH"
-  exit 1
+  echo ""
+  echo "ERROR: gh pr create failed with exit code $PR_EXIT"
+  echo "Retrying without label..."
+
+  set +e
+  gh pr create \
+    --repo "$REPO_OWNER_NAME" \
+    --base "$TARGET_BRANCH" \
+    --head "$BRANCH_NAME" \
+    --title "Bump chart references and update generated files" \
+    --body "$PR_BODY"
+
+  PR_EXIT=$?
+  set -e
+
+  if [ $PR_EXIT -ne 0 ]; then
+    echo ""
+    echo "ERROR: PR creation failed even without label (exit code: $PR_EXIT)"
+    git -C "$REPO_DIR" checkout -f "$TARGET_BRANCH"
+    exit 1
+  fi
 fi
 
 # Return to target branch

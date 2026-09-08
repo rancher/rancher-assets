@@ -36,14 +36,34 @@ for TARGET_BRANCH in "${TARGET_BRANCHES[@]}"; do
   summary "### Branch: \`$TARGET_BRANCH\`"
 
   # Fetch and checkout target branch
-  if ! git -C "$RANCHER_DIR" fetch "$RANCHER_REMOTE" "$TARGET_BRANCH" 2>&1; then
-    summary "  ⚠️  Failed to fetch branch \`$TARGET_BRANCH\` - skipping"
+  log "  - Fetching branch \`$TARGET_BRANCH\` from \`$RANCHER_REMOTE\`"
+  FETCH_OUTPUT=$(git -C "$RANCHER_DIR" fetch "$RANCHER_REMOTE" "$TARGET_BRANCH" 2>&1)
+  FETCH_EXIT=$?
+
+  if [ $FETCH_EXIT -ne 0 ]; then
+    summary "  ⚠️  Failed to fetch branch \`$TARGET_BRANCH\` (exit code: $FETCH_EXIT)"
+    summary "    Error output:"
+    summary '    ```'
+    echo "$FETCH_OUTPUT" | head -10 | while IFS= read -r line; do
+      summary "    $line"
+    done
+    summary '    ```'
     FAILED_BRANCHES+=("$TARGET_BRANCH (fetch failed)")
     continue
   fi
 
-  if ! git -C "$RANCHER_DIR" checkout -B "$TARGET_BRANCH" "$RANCHER_REMOTE/$TARGET_BRANCH" 2>&1; then
-    summary "  ⚠️  Failed to checkout branch \`$TARGET_BRANCH\` - skipping"
+  log "  - Checking out branch \`$TARGET_BRANCH\`"
+  CHECKOUT_OUTPUT=$(git -C "$RANCHER_DIR" checkout -B "$TARGET_BRANCH" "$RANCHER_REMOTE/$TARGET_BRANCH" 2>&1)
+  CHECKOUT_EXIT=$?
+
+  if [ $CHECKOUT_EXIT -ne 0 ]; then
+    summary "  ⚠️  Failed to checkout branch \`$TARGET_BRANCH\` (exit code: $CHECKOUT_EXIT)"
+    summary "    Error output:"
+    summary '    ```'
+    echo "$CHECKOUT_OUTPUT" | head -10 | while IFS= read -r line; do
+      summary "    $line"
+    done
+    summary '    ```'
     FAILED_BRANCHES+=("$TARGET_BRANCH (checkout failed)")
     continue
   fi
@@ -118,14 +138,17 @@ Automated update from ${SOURCE_REPO} release ${TAG}
 Automation: push-to-rancher
 Created-by: rancher-assets-release-integration"
 
-  if ! commit_if_changed "$COMMIT_MSG"; then
-    exit_code=$?
-    if [ "$exit_code" -eq 1 ]; then
-      summary "  ℹ️  No changes detected - skipping"
-    else
-      summary "  ⚠️  Failed to commit changes - skipping"
-      FAILED_BRANCHES+=("$TARGET_BRANCH (commit failed)")
-    fi
+  COMMIT_EXIT=0
+  commit_if_changed "$COMMIT_MSG" || COMMIT_EXIT=$?
+
+  if [ $COMMIT_EXIT -eq 1 ]; then
+    summary "  ℹ️  No changes detected - skipping"
+    git -C "$RANCHER_DIR" checkout -f "$TARGET_BRANCH"
+    git -C "$RANCHER_DIR" branch -D "$BRANCH_NAME" || true
+    continue
+  elif [ $COMMIT_EXIT -ne 0 ]; then
+    summary "  ⚠️  Failed to commit changes (exit code: $COMMIT_EXIT) - skipping"
+    FAILED_BRANCHES+=("$TARGET_BRANCH (commit failed)")
     git -C "$RANCHER_DIR" checkout -f "$TARGET_BRANCH"
     git -C "$RANCHER_DIR" branch -D "$BRANCH_NAME" || true
     continue
@@ -139,8 +162,17 @@ Created-by: rancher-assets-release-integration"
 
   # Push branch
   log "  - Pushing branch \`$BRANCH_NAME\`"
-  if ! git -C "$RANCHER_DIR" push -u "$RANCHER_REMOTE" "$BRANCH_NAME"; then
-    summary "  ⚠️  Failed to push branch - skipping PR creation"
+  PUSH_OUTPUT=$(git -C "$RANCHER_DIR" push -u "$RANCHER_REMOTE" "$BRANCH_NAME" 2>&1)
+  PUSH_EXIT=$?
+
+  if [ $PUSH_EXIT -ne 0 ]; then
+    summary "  ⚠️  Failed to push branch (exit code: $PUSH_EXIT)"
+    summary "    Error output:"
+    summary '    ```'
+    echo "$PUSH_OUTPUT" | head -10 | while IFS= read -r line; do
+      summary "    $line"
+    done
+    summary '    ```'
     FAILED_BRANCHES+=("$TARGET_BRANCH (push failed)")
     git -C "$RANCHER_DIR" checkout -f "$TARGET_BRANCH"
     continue
@@ -148,6 +180,7 @@ Created-by: rancher-assets-release-integration"
 
   # Create PR
   log "  - Creating PR..."
+  log "    Running: gh pr create --repo rancher/rancher --base $TARGET_BRANCH --head $BRANCH_NAME"
 
   # Format branch name for title: strip "release/" prefix
   BRANCH_LABEL="${TARGET_BRANCH#release/}"
@@ -159,6 +192,7 @@ Update rancher-assets image to [\`${TAG}\`](https://github.com/${SOURCE_REPO}/re
 - Updated \`defaultAssetsImage\` in \`build.yaml\`
 - Ran \`go generate ./pkg/...\` to update generated files"
 
+  # Try creating PR with label first
   PR_OUTPUT=$(gh pr create \
     --repo rancher/rancher \
     --base "$TARGET_BRANCH" \
@@ -167,14 +201,33 @@ Update rancher-assets image to [\`${TAG}\`](https://github.com/${SOURCE_REPO}/re
     --body "$PR_BODY" \
     --label "status/auto-created" 2>&1)
 
-  if [ $? -eq 0 ]; then
+  PR_EXIT=$?
+
+  # If label fails, try without it
+  if [ $PR_EXIT -ne 0 ] && echo "$PR_OUTPUT" | grep -qi "label.*not found\|invalid.*label"; then
+    log "    Label 'status/auto-created' not found, retrying without label..."
+    PR_OUTPUT=$(gh pr create \
+      --repo rancher/rancher \
+      --base "$TARGET_BRANCH" \
+      --head "$BRANCH_NAME" \
+      --title "[${BRANCH_LABEL}] Update rancher-assets to ${TAG}" \
+      --body "$PR_BODY" 2>&1)
+    PR_EXIT=$?
+  fi
+
+  if [ $PR_EXIT -eq 0 ]; then
     PR_URL=$(echo "$PR_OUTPUT" | tail -1)
     summary "  ✓ PR created: $PR_URL"
     CREATED_PRS+=("$PR_URL")
     CREATED_PR_BRANCHES+=("$TARGET_BRANCH")
   else
-    summary "  ⚠️  Failed to create PR"
-    echo "$PR_OUTPUT" | sed 's/^/    /' >&2
+    summary "  ⚠️  Failed to create PR (exit code: $PR_EXIT)"
+    summary "    Error output:"
+    summary '    ```'
+    echo "$PR_OUTPUT" | while IFS= read -r line; do
+      summary "    $line"
+    done
+    summary '    ```'
     FAILED_BRANCHES+=("$TARGET_BRANCH (PR creation failed)")
   fi
 

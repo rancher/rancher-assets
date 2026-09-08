@@ -70,6 +70,16 @@ commit_if_changed() {
   if git -C "$REPO_DIR" diff --quiet --exit-code && [ -z "$(git -C "$REPO_DIR" status --porcelain)" ]; then
     return 1
   fi
-  git -C "$REPO_DIR" add .
-  git -C "$REPO_DIR" commit -m "$message"
+
+  if ! git -C "$REPO_DIR" add . 2>&1; then
+    echo "ERROR: Failed to stage changes" >&2
+    return 2
+  fi
+
+  if ! git -C "$REPO_DIR" commit -m "$message" 2>&1; then
+    echo "ERROR: Failed to create commit" >&2
+    return 2
+  fi
+
+  return 0
 }

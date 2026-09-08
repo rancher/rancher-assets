@@ -3,14 +3,6 @@ name: Build and Release
 # Tier 2 Workflow: Triggered by (CalVer) tags to build and push Docker images
 
 on:
-  # Triggered manually by auto-release workflow (one run per tag)
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag to build and release'
-        required: false
-        type: string
-  # Also triggered by manually created tag pushes
   push:
     tags:
       - 'v*'
@@ -39,13 +31,7 @@ jobs:
       - name: Parse CalVer tag
         id: parse
         run: |
-          # Get version from either workflow_dispatch input or tag push
-          if [[ -n "${{ inputs.tag }}" ]]; then
-            VERSION="${{ inputs.tag }}"
-          else
-            VERSION=${GITHUB_REF#refs/tags/}
-          fi
-
+          VERSION=${GITHUB_REF#refs/tags/}
           echo "Parsing tag: $VERSION"
 
           # CalVer format: v{RANCHER_MINOR}-{YYYYMMDD}T{HHMM}Z[-dev]
@@ -224,6 +210,21 @@ jobs:
             --tag-message "${{ steps.tag_message.outputs.message }}" \
             > /tmp/release-notes.md
 
+      - name: Read GitHub App creds from Vault
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        if: github.repository == 'rancher/rancher-assets'
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/github/pr-actions-write-app/credentials appId | APP_ID ;
+            secret/data/github/repo/${{ github.repository }}/github/pr-actions-write-app/credentials privateKey | PRIVATE_KEY
+
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.PRIVATE_KEY }}
+
       - name: Publish release (undraft)
         if: success()
         run: |
@@ -233,4 +234,4 @@ jobs:
             --notes-file /tmp/release-notes.md
           echo "Release $VERSION published successfully!"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}

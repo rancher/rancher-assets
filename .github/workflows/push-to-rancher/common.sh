@@ -125,22 +125,44 @@ validate_image_exists() {
   local full_image="${IMAGE_REGISTRY}/${IMAGE_REPO}:${tag}"
   summary "- **Docker Hub**: \`${full_image}\`"
 
-  if docker manifest inspect "$full_image" >/dev/null 2>&1; then
+  # Check if docker is available
+  if ! command -v docker >/dev/null 2>&1; then
+    summary "  ✗ Docker command not found"
+    summary ""
+    summary "### Error Details:"
+    summary '```'
+    summary "docker command is not available in PATH"
+    summary "This workflow requires docker to validate image existence"
+    summary '```'
+    return 1
+  fi
+
+  # Try to inspect the manifest with detailed error output
+  local manifest_output
+  manifest_output=$(docker manifest inspect "$full_image" 2>&1)
+  local manifest_exit=$?
+
+  if [ $manifest_exit -eq 0 ]; then
     summary "  ✓ Image found"
   else
-    summary "  ✗ Image NOT found"
+    summary "  ✗ Image NOT found or inaccessible"
+    summary ""
+    summary "### Error Details:"
+    summary '```'
+    echo "$manifest_output" | head -20 | while IFS= read -r line; do
+      summary "$line"
+    done
+    summary '```'
     validation_failed=1
   fi
 
   if [ $validation_failed -eq 1 ]; then
-    echo "" >&2
-    echo "ERROR: Image validation failed" >&2
-    echo "ERROR: Cannot proceed with PR creation until image is published" >&2
-    exit 1
+    return 1
   fi
 
   summary ""
   summary "✅ Image validation passed"
+  return 0
 }
 
 # Commit all changes in RANCHER_DIR if any exist. Returns 1 if no changes, 0 on success.
@@ -149,6 +171,16 @@ commit_if_changed() {
   if git -C "$RANCHER_DIR" diff --quiet --exit-code && [ -z "$(git -C "$RANCHER_DIR" status --porcelain)" ]; then
     return 1
   fi
-  git -C "$RANCHER_DIR" add .
-  git -C "$RANCHER_DIR" commit -m "$message"
+
+  if ! git -C "$RANCHER_DIR" add . 2>&1; then
+    echo "ERROR: Failed to stage changes" >&2
+    return 2
+  fi
+
+  if ! git -C "$RANCHER_DIR" commit -m "$message" 2>&1; then
+    echo "ERROR: Failed to create commit" >&2
+    return 2
+  fi
+
+  return 0
 }
