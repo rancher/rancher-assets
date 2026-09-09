@@ -69,6 +69,8 @@ jobs:
     steps:
       - name: Checkout rancher-assets repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Read GitHub App Credentials from Vault
         if: github.repository == 'rancher/rancher-assets'
