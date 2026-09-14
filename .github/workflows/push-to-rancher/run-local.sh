@@ -2,7 +2,10 @@
 # Local entry point for testing push-to-rancher workflow.
 #
 # Usage:
-#   ./run-local.sh --tag v2.16-20260901T1200Z --rancher-dir /path/to/rancher [--dry-run] [--remote upstream]
+#   ./run-local.sh --tag v2.16-20260901T1200Z --rancher-dir /path/to/rancher [--dry-run] [--remote upstream] [--branches "release/v2.16,main"]
+#
+# The --tag parameter should be a full rancher-assets image tag (e.g., v2.16-20260901T1200Z).
+# This tag must exist in your local git repository for the script to extract the minor version.
 
 set -euo pipefail
 

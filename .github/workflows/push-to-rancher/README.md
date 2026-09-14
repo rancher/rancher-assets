@@ -7,8 +7,20 @@ Automates opening PRs against [rancher/rancher](https://github.com/rancher/ranch
 ### `.github/workflows/push-to-rancher.yml`
 
 Standalone workflow that can be:
-- **Manually triggered** via `workflow_dispatch` with any tag (including dev builds)
-- **Called** from other workflows (e.g., `release.yml` for stable releases)
+- **Automatically triggered** when a release is published (uses the release tag and commit)
+- **Manually triggered** via `workflow_dispatch` with a git ref and rancher minor version
+- **Called** from other workflows via `workflow_call` with a git ref and rancher minor version
+
+**Trigger modes:**
+
+1. **Release published** (automatic):
+   - Uses the release tag (e.g., `v2.16-20260901T1200Z`) and commit SHA from the release event
+   - Extracts rancher minor version from the tag
+   
+2. **Manual/workflow_call**:
+   - Requires `git_ref` (commit SHA or tag) and `rancher_minor` (e.g., `2.16`)
+   - Resolves the image tag using `resolve-image-tag.sh` (finds tags matching the version pattern at that commit)
+   - Prefers non-dev tags if multiple tags exist
 
 ### `.github/workflows/release.yml`
 
@@ -101,6 +113,7 @@ Options:
 
 | Script | What it does |
 |---|---|
+| `resolve-image-tag.sh` | (GHA only) Resolves image tag from git ref + rancher minor for manual triggers |
 | `update-build-yaml.sh` | Updates `defaultAssetsImage` in `build.yaml` using `yq` |
 | `create-prs.sh` | For each target branch: checkout, update, `go generate`, commit, push, create PR |
 | `run-gha.sh` | GHA entry point: validates image exists, clones rancher/rancher, calls create-prs.sh |
