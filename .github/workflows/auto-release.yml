@@ -136,7 +136,9 @@ jobs:
           echo "$TAGS"
           echo ""
 
-          echo "$TAGS" | xargs git push origin
+          echo "$TAGS" | while read -r tag; do
+            [ -n "$tag" ] && git push origin "$tag"
+          done
 
           echo ""
           echo "All tags pushed successfully"
