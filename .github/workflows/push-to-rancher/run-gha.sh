@@ -3,7 +3,9 @@
 # Called from push-to-rancher.yml after token generation and rancher checkout.
 #
 # Required env vars (set by push-to-rancher.yml):
-#   TAG          - rancher-assets tag (e.g. v2.16-20260901T1200Z)
+#   TAG          - rancher-assets image tag (e.g. v2.16-20260901T1200Z)
+#                  For release triggers: comes from github.event.release.tag_name
+#                  For manual triggers: resolved from git_ref via resolve-image-tag.sh
 #   GH_TOKEN     - GitHub app token with access to rancher/rancher
 #   APP_USER     - GitHub app slug for commit attribution (e.g. "my-app[bot]")
 #   SOURCE_REPO  - source repo (github.repository)
