@@ -33,6 +33,7 @@ jobs:
     outputs:
       git_ref: ${{ steps.parse.outputs.ref }}
       rancher_minor: ${{ steps.parse.outputs.minor }}
+      image_tag: ${{ steps.parse.outputs.tag }}
     steps:
       - name: Parse release tag
         id: parse
@@ -50,16 +51,50 @@ jobs:
 
           echo "ref=${{ github.sha }}" >> $GITHUB_OUTPUT
           echo "minor=$MINOR" >> $GITHUB_OUTPUT
-          echo "Extracted: ref=${{ github.sha }}, minor=$MINOR"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Extracted: ref=${{ github.sha }}, minor=$MINOR, tag=$TAG"
+
+  resolve-tag:
+    name: Resolve image tag
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    outputs:
+      git_ref: ${{ steps.resolve.outputs.ref }}
+      rancher_minor: ${{ steps.resolve.outputs.minor }}
+      image_tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.git_ref }}
+          fetch-depth: 0  # Need tags for tag resolution
+          persist-credentials: false
+
+      - name: Resolve image tag from git ref
+        id: resolve
+        run: |
+          GIT_REF="${{ inputs.git_ref }}"
+          MINOR="${{ inputs.rancher_minor }}"
+
+          echo "Manual trigger - resolving image tag"
+          echo "  Git ref: $GIT_REF"
+          echo "  Rancher minor: $MINOR"
+          echo ""
+
+          TAG=$(./.github/workflows/push-to-rancher/resolve-image-tag.sh "$GIT_REF" "$MINOR")
+
+          echo "ref=$GIT_REF" >> $GITHUB_OUTPUT
+          echo "minor=$MINOR" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
   push-to-rancher:
     name: Push to rancher/rancher
-    needs: [parse-release]
-    if: always() && !cancelled() && (github.event_name != 'release' || needs.parse-release.result == 'success')
+    needs: [parse-release, resolve-tag]
+    if: always() && !cancelled() && (needs.parse-release.result == 'success' || needs.resolve-tag.result == 'success')
     runs-on: ubuntu-latest
     # Prevent duplicate runs for same commit+minor (when both dev and stable tags trigger)
     concurrency:
-      group: push-to-rancher-${{ needs.parse-release.outputs.git_ref || inputs.git_ref }}-${{ needs.parse-release.outputs.rancher_minor || inputs.rancher_minor }}
+      group: push-to-rancher-${{ needs.parse-release.outputs.git_ref || needs.resolve-tag.outputs.git_ref }}-${{ needs.parse-release.outputs.rancher_minor || needs.resolve-tag.outputs.rancher_minor }}
       cancel-in-progress: false
     permissions:
       contents: read
@@ -101,7 +136,7 @@ jobs:
       - name: Push updates to rancher/rancher
         if: github.repository == 'rancher/rancher-assets'
         env:
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ needs.parse-release.outputs.image_tag || needs.resolve-tag.outputs.image_tag }}
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
           APP_USER: "${{ steps.generate_token.outputs.app-slug }}[bot]"
           SOURCE_REPO: ${{ github.repository }}
