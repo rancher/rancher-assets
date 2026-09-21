@@ -37,30 +37,30 @@ chart-versions:
         upstream-refs:
             prod:
                 charts:
-                    fetched-at: 2026-09-15T11:12:57.942766225Z
+                    fetched-at: 2026-09-21T11:13:42.851556206Z
                     branch: release-v2.15
                     commit: 8344ca4886ee8b2c6726b8d5a022a15a7333950b
                 partner:
-                    fetched-at: 2026-09-15T11:12:58.29455061Z
+                    fetched-at: 2026-09-21T11:13:42.948582099Z
                     branch: main
-                    commit: 4435527b67d730a44af67b519bea39a78f60ee21
+                    commit: a5ce65db2bd512cc376f14ff60d8b94d6d73226a
                 rke2:
-                    fetched-at: 2026-09-15T11:12:58.649567089Z
+                    fetched-at: 2026-09-21T11:13:43.041043757Z
                     branch: main
-                    commit: 1f890ae6b0dfad27a674fa28c369c49ca383afa9
+                    commit: d5148a22059d3943cbdb7e4b80490ab995101db2
             dev:
                 charts:
-                    fetched-at: 2026-09-15T11:12:59.002725435Z
+                    fetched-at: 2026-09-21T11:13:43.134428633Z
                     branch: dev-v2.15
-                    commit: ee6cba36cc29f763f99b9e59845e9a6c9ad202f6
+                    commit: def65e43150854691848a2a6da214bdc4d143f54
                 partner:
-                    fetched-at: 2026-09-15T11:12:59.353829142Z
+                    fetched-at: 2026-09-21T11:13:43.226120066Z
                     branch: main
-                    commit: 4435527b67d730a44af67b519bea39a78f60ee21
+                    commit: a5ce65db2bd512cc376f14ff60d8b94d6d73226a
                 rke2:
-                    fetched-at: 2026-09-15T11:12:59.718615368Z
+                    fetched-at: 2026-09-21T11:13:43.316642644Z
                     branch: main
-                    commit: 1f890ae6b0dfad27a674fa28c369c49ca383afa9
+                    commit: d5148a22059d3943cbdb7e4b80490ab995101db2
     "2.16":
         latest-stable: null
         latest-prerelease: null
@@ -68,30 +68,30 @@ chart-versions:
         upstream-refs:
             prod:
                 charts:
-                    fetched-at: 2026-09-15T11:13:00.071620635Z
+                    fetched-at: 2026-09-21T11:13:43.413294001Z
                     branch: release-v2.16
                     commit: 659be15811aebe544b671f16990adea61e1c4e45
                 partner:
-                    fetched-at: 2026-09-15T11:13:00.426030218Z
+                    fetched-at: 2026-09-21T11:13:43.503958922Z
                     branch: main
-                    commit: 4435527b67d730a44af67b519bea39a78f60ee21
+                    commit: a5ce65db2bd512cc376f14ff60d8b94d6d73226a
                 rke2:
-                    fetched-at: 2026-09-15T11:13:00.781272053Z
+                    fetched-at: 2026-09-21T11:13:43.595288442Z
                     branch: main
-                    commit: 1f890ae6b0dfad27a674fa28c369c49ca383afa9
+                    commit: d5148a22059d3943cbdb7e4b80490ab995101db2
             dev:
                 charts:
-                    fetched-at: 2026-09-15T11:13:01.135427594Z
+                    fetched-at: 2026-09-21T11:13:43.691997813Z
                     branch: dev-v2.16
-                    commit: b33731527f453d6b5b8783dd0e8e08b74f7ddf6b
+                    commit: 52eb9b232f967a29ea63e5a02305686d03c4c1d9
                 partner:
-                    fetched-at: 2026-09-15T11:13:01.49012339Z
+                    fetched-at: 2026-09-21T11:13:43.783265358Z
                     branch: main
-                    commit: 4435527b67d730a44af67b519bea39a78f60ee21
+                    commit: a5ce65db2bd512cc376f14ff60d8b94d6d73226a
                 rke2:
-                    fetched-at: 2026-09-15T11:13:01.844196331Z
+                    fetched-at: 2026-09-21T11:13:43.876649186Z
                     branch: main
-                    commit: 1f890ae6b0dfad27a674fa28c369c49ca383afa9
+                    commit: d5148a22059d3943cbdb7e4b80490ab995101db2
 base-image:
     bci-base: 16.0@sha256:c121aa8f01348b602e5b29b3e868693de3917cc15ab4735fcbd013ea159c426f
     bci-micro: 16.0@sha256:0a1b2222f55d4505ff50b9355a1877b07b5e442d7fd6efdc44b907cb0dd9572d
@@ -99,5 +99,5 @@ copy-script-hash: 9b9da8e26b3377be489743e5f7164394e3fb3c67ea134cb629ba1904f8cd80
 template-hashes:
     prod-template: 0cf523783cb5d391cf9478f453bf1ce88599256dc3192b27c1c80774c49efa40
     dev-template: 6f2d670e49909f20a274718cd8a9a0e1f5af5ebbce912ae515a337183ac4e6ec
-generated-at: 2026-09-15T11:13:01.844213433Z
+generated-at: 2026-09-21T11:13:43.876663793Z
 generator-version: v0.1.0
