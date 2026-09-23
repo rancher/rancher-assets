@@ -5,6 +5,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/rancher/rancher-assets/internal/config"
@@ -50,6 +52,12 @@ func Generate(ctx context.Context, args []string) error {
 
 	logger.Info("Found %d Rancher minor versions: %v", len(majors), majors)
 
+	// Clean up stale Dockerfiles and lock entries for removed Rancher versions
+	lockChanged, err := cleanStaleFilesAndLock(cfg, lock)
+	if err != nil {
+		return fmt.Errorf("failed to clean stale files: %w", err)
+	}
+
 	// Always compute file hashes for reproducibility (these are local files)
 	logger.Info("\nComputing file hashes for reproducibility...")
 	logger.StartProgress("  - copy-charts.sh: ")
@@ -75,8 +83,6 @@ func Generate(ctx context.Context, args []string) error {
 		return fmt.Errorf("failed to compute dev template hash: %w", err)
 	}
 	logger.CompleteProgress("%s", devHash[:16]+"...")
-
-	lockChanged := false
 
 	if lock.CopyScriptHash != scriptHash {
 		lock.CopyScriptHash = scriptHash
@@ -212,6 +218,72 @@ func Generate(ctx context.Context, args []string) error {
 		logger.Info("\nReview changes with: git diff dockerfiles/ lock.yaml")
 	} else {
 		logger.Info("\nReview changes with: git diff dockerfiles/")
+	}
+
+	return nil
+}
+
+func cleanStaleFilesAndLock(cfg *config.Config, lock *lockfile.Lock) (bool, error) {
+	// Diff config and lock to find removed versions
+	configMajors := make(map[string]bool)
+	for major := range cfg.ChartVersions {
+		configMajors[major] = true
+	}
+
+	var removedMajors []string
+	for lockMajor := range lock.ChartVersions {
+		if !configMajors[lockMajor] {
+			removedMajors = append(removedMajors, lockMajor)
+		}
+	}
+
+	if len(removedMajors) > 0 {
+		logger.Info("\nDetected removed Rancher versions: %v", removedMajors)
+
+		for _, major := range removedMajors {
+			if err := archiveDockerfiles(major); err != nil {
+				return false, fmt.Errorf("failed to archive Dockerfiles for %s: %w", major, err)
+			}
+
+			// Remove from lock file
+			delete(lock.ChartVersions, major)
+		}
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func archiveDockerfiles(version string) error {
+	// Archive prod dockerfile
+	prodFile := filepath.Join(dockerfilesDir, fmt.Sprintf("Dockerfile.%s", version))
+	// Archive dev dockerfile
+	devFile := filepath.Join(dockerfilesDir, fmt.Sprintf("Dockerfile.%s-dev", version))
+
+	// Move files to archived/ if they exist
+	archiveDir := filepath.Join(dockerfilesDir, "archived")
+	if err := os.MkdirAll(archiveDir, 0755); err != nil {
+		return fmt.Errorf("failed to create archive directory: %w", err)
+	}
+
+	// Move prod file
+	if _, err := os.Stat(prodFile); err == nil {
+		archivePath := filepath.Join(archiveDir, fmt.Sprintf("Dockerfile.%s", version))
+		if err := os.Rename(prodFile, archivePath); err != nil {
+			logger.Warn("Failed to move file to archive %s: %v", prodFile, err)
+		} else {
+			logger.Info("  Archived: %s", prodFile)
+		}
+	}
+
+	// Move dev file
+	if _, err := os.Stat(devFile); err == nil {
+		archivePath := filepath.Join(archiveDir, fmt.Sprintf("Dockerfile.%s-dev", version))
+		if err := os.Rename(devFile, archivePath); err != nil {
+			logger.Warn("Failed to move file to archive %s: %v", devFile, err)
+		} else {
+			logger.Info("  Archived: %s", devFile)
+		}
 	}
 
 	return nil
