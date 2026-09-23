@@ -256,19 +256,19 @@ func cleanStaleFilesAndLock(cfg *config.Config, lock *lockfile.Lock) (bool, erro
 
 func archiveDockerfiles(version string) error {
 	// Archive prod dockerfile
-	prodFile := filepath.Join(dockerfilesDir, fmt.Sprintf("Dockerfile.%s", version))
+	prodFile := filepath.Join(dockerfilesDir, "Dockerfile."+version)
 	// Archive dev dockerfile
 	devFile := filepath.Join(dockerfilesDir, fmt.Sprintf("Dockerfile.%s-dev", version))
 
 	// Move files to archived/ if they exist
 	archiveDir := filepath.Join(dockerfilesDir, "archived")
-	if err := os.MkdirAll(archiveDir, 0755); err != nil {
+	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create archive directory: %w", err)
 	}
 
 	// Move prod file
 	if _, err := os.Stat(prodFile); err == nil {
-		archivePath := filepath.Join(archiveDir, fmt.Sprintf("Dockerfile.%s", version))
+		archivePath := filepath.Join(archiveDir, "Dockerfile."+version)
 		if err := os.Rename(prodFile, archivePath); err != nil {
 			logger.Warn("Failed to move file to archive %s: %v", prodFile, err)
 		} else {
