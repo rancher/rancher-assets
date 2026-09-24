@@ -65,7 +65,7 @@ ARG BUILD_URL
 
 LABEL "io.artifacthub.package.logo-url"="https://raw.githubusercontent.com/rancher/ui/master/public/assets/images/logos/welcome-cow.svg" \
     "io.artifacthub.package.readme-url"="https://raw.githubusercontent.com/rancher/rancher/release/v2.6/README.md" \
-    "org.opencontainers.image.description"="Rancher Charts 2.16: bundled Helm charts for Rancher 2.16.x" \
+    "org.opencontainers.image.description"="Rancher Charts 2.16: bundled Helm charts for Rancher 2.16" \
     "org.opencontainers.image.title"="Rancher Charts 2.16" \
     "org.opencontainers.image.source"="https://github.com/rancher/rancher-assets" \
     "org.opencontainers.image.version"=${VERSION} \
