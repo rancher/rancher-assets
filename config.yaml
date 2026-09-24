@@ -10,7 +10,7 @@ base-image:
 chart-versions:
   # Rancher 2.16.x
   "2.16":
-    rancher-branch: release/v2.16
+    rancher-branch: main
     prod:
       charts-branch: release-v2.16
       partner-branch: main
