@@ -6,28 +6,28 @@ chart-versions:
         upstream-refs:
             prod:
                 charts:
-                    fetched-at: 2026-09-29T11:13:21.750940479Z
+                    fetched-at: 2026-09-30T11:12:58.013730402Z
                     branch: release-v2.16
                     commit: 3d4d67c78546fdc2d83ca9eb4fa180d763c084ea
                 partner:
-                    fetched-at: 2026-09-29T11:13:22.118583687Z
+                    fetched-at: 2026-09-30T11:12:58.456548222Z
                     branch: main
-                    commit: 903ccdc9a96dc60fd0da1a8103ac0b695d83b682
+                    commit: 1d30c2512496a921a0655c13185831839134fe1a
                 rke2:
-                    fetched-at: 2026-09-29T11:13:22.485355259Z
+                    fetched-at: 2026-09-30T11:12:58.81973644Z
                     branch: main
                     commit: 804e0124e2d8104953d3237118f07e7f7844eea2
             dev:
                 charts:
-                    fetched-at: 2026-09-29T11:13:22.85141839Z
+                    fetched-at: 2026-09-30T11:12:59.18550451Z
                     branch: dev-v2.16
-                    commit: 28255061203b7ed7acac059b7aa06dd5187434b8
+                    commit: 907438cc4758800b75becd35e59bcfcf0315f0f0
                 partner:
-                    fetched-at: 2026-09-29T11:13:23.218846583Z
+                    fetched-at: 2026-09-30T11:12:59.579715601Z
                     branch: main
-                    commit: 903ccdc9a96dc60fd0da1a8103ac0b695d83b682
+                    commit: 1d30c2512496a921a0655c13185831839134fe1a
                 rke2:
-                    fetched-at: 2026-09-29T11:13:23.58776953Z
+                    fetched-at: 2026-09-30T11:12:59.952591076Z
                     branch: main
                     commit: 804e0124e2d8104953d3237118f07e7f7844eea2
 base-image:
@@ -37,5 +37,5 @@ copy-script-hash: 9b9da8e26b3377be489743e5f7164394e3fb3c67ea134cb629ba1904f8cd80
 template-hashes:
     prod-template: 0fb565e5c14861121aee1c2c83f782065f936ffd88ee2c638a90800cab24ca76
     dev-template: 390c0a9cd21b47cea0ff7ee512f5f8efc0c87849fe5412a63a94743063b63593
-generated-at: 2026-09-29T11:13:23.587789254Z
+generated-at: 2026-09-30T11:12:59.95260719Z
 generator-version: v0.1.0
