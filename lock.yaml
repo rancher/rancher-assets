@@ -6,28 +6,28 @@ chart-versions:
         upstream-refs:
             prod:
                 charts:
-                    fetched-at: 2026-10-02T11:13:29.026382037Z
+                    fetched-at: 2026-10-05T11:13:47.228121979Z
                     branch: release-v2.16
                     commit: 3d4d67c78546fdc2d83ca9eb4fa180d763c084ea
                 partner:
-                    fetched-at: 2026-10-02T11:13:29.379168868Z
+                    fetched-at: 2026-10-05T11:13:47.483391473Z
                     branch: main
-                    commit: 845bf10619e972282e4496e62b08df3ed5ecd472
+                    commit: 7827068a57882bd90503dabe101903990e7ae4b9
                 rke2:
-                    fetched-at: 2026-10-02T11:13:29.733882696Z
+                    fetched-at: 2026-10-05T11:13:47.736002324Z
                     branch: main
                     commit: 71beae9e015084612f53ca5795378b8b7df94b71
             dev:
                 charts:
-                    fetched-at: 2026-10-02T11:13:30.100343961Z
+                    fetched-at: 2026-10-05T11:13:47.988105916Z
                     branch: dev-v2.16
                     commit: 44a2bf78fdf00c8b849a0448c0feff2b8bdda42d
                 partner:
-                    fetched-at: 2026-10-02T11:13:30.468788366Z
+                    fetched-at: 2026-10-05T11:13:48.245689627Z
                     branch: main
-                    commit: 845bf10619e972282e4496e62b08df3ed5ecd472
+                    commit: 7827068a57882bd90503dabe101903990e7ae4b9
                 rke2:
-                    fetched-at: 2026-10-02T11:13:30.833871217Z
+                    fetched-at: 2026-10-05T11:13:48.49416552Z
                     branch: main
                     commit: 71beae9e015084612f53ca5795378b8b7df94b71
 base-image:
@@ -37,5 +37,5 @@ copy-script-hash: 9b9da8e26b3377be489743e5f7164394e3fb3c67ea134cb629ba1904f8cd80
 template-hashes:
     prod-template: 0fb565e5c14861121aee1c2c83f782065f936ffd88ee2c638a90800cab24ca76
     dev-template: 390c0a9cd21b47cea0ff7ee512f5f8efc0c87849fe5412a63a94743063b63593
-generated-at: 2026-10-02T11:13:30.833887056Z
+generated-at: 2026-10-05T11:13:48.494178855Z
 generator-version: v0.1.0
