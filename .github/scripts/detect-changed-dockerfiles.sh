@@ -28,8 +28,26 @@ TO_REF="$2"
 # --name-only: only show file names
 # --diff-filter=ACMR: Added, Copied, Modified, Renamed (not Deleted)
 # -- dockerfiles/: only look in dockerfiles directory
-git diff --name-only --diff-filter=ACMR "$FROM_REF..$TO_REF" -- dockerfiles/ \
-    | grep -E '^dockerfiles/Dockerfile\.' \
-    || true  # Don't fail if no matches (grep returns 1 when no matches)
+CHANGED=$(
+    git diff --name-only --diff-filter=ACMR \
+        "$FROM_REF..$TO_REF" -- dockerfiles/ | grep -E '^dockerfiles/Dockerfile\.' || true
+)
 
-# Note: Output is one path per line, ready for iteration in workflows
+# Create a Variable to store the Minors that Had changes
+CHANGED_MINORS=""
+
+for dockerfile in $CHANGED; do
+    [ -z "$dockerfile" ] && continue
+
+    # Reuse the existing parser instead of re-deriving the prefix/-dev-suffix
+    # stripping here - it already knows the Dockerfile.X.XX[-dev] format and
+    # sets $RANCHER_MINOR / $BUILD_TYPE.
+    eval "$(./.github/scripts/parse-dockerfile-name.sh "$dockerfile")"
+
+    # Dedup: only append if not already recorded.
+    if ! echo "$CHANGED_MINORS" | grep -qw "$RANCHER_MINOR"; then
+        CHANGED_MINORS="$CHANGED_MINORS $RANCHER_MINOR"
+    fi
+done
+
+echo "$CHANGED_MINORS"
