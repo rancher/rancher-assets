@@ -41,10 +41,6 @@ AFTER_COMMIT=$(git show "${TO_REF}:lock.yaml" | yq "$QUERY")
 echo "BEFORE_COMMIT: " ${BEFORE_COMMIT}
 echo "AFTER_COMMIT: " ${AFTER_COMMIT}
 
-# TODO: also check base-image.bci-base/bci-micro, copy-script-hash, and
-# template-hashes.prod-template - a legitimate BCI/script/template bump with
-# no chart movement should still count as a real release, not get skipped.
-
 if [ "$BEFORE_COMMIT" != "$AFTER_COMMIT" ]; then
     echo "true"
 else
