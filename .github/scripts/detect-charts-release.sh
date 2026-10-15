@@ -29,17 +29,17 @@ FROM_REF="$1"
 TO_REF="$2"
 MINOR="$3"
 
-echo "FROM_REF: "  ${FROM_REF}
-echo "TO_REF: " ${TO_REF}
-echo "MINOR: " ${MINOR}
+echo "FROM_REF: "  ${FROM_REF} >&2
+echo "TO_REF: " ${TO_REF} >&2
+echo "MINOR: " ${MINOR} >&2
 
 QUERY=".chart-versions.\"${MINOR}\".upstream-refs.prod.charts.commit"
 
 BEFORE_COMMIT=$(git show "${FROM_REF}:lock.yaml" | yq "$QUERY")
 AFTER_COMMIT=$(git show "${TO_REF}:lock.yaml" | yq "$QUERY")
 
-echo "BEFORE_COMMIT: " ${BEFORE_COMMIT}
-echo "AFTER_COMMIT: " ${AFTER_COMMIT}
+echo "BEFORE_COMMIT: " ${BEFORE_COMMIT} >&2
+echo "AFTER_COMMIT: " ${AFTER_COMMIT} >&2
 
 if [ "$BEFORE_COMMIT" != "$AFTER_COMMIT" ]; then
     echo "true"
