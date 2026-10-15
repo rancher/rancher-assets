@@ -220,6 +220,16 @@ Update rancher-assets image to [\`${TAG}\`](https://github.com/${SOURCE_REPO}/re
     summary "  ✓ PR created: $PR_URL"
     CREATED_PRS+=("$PR_URL")
     CREATED_PR_BRANCHES+=("$TARGET_BRANCH")
+
+    # Request native GitHub auto-merge now, at creation time, rather than waiting
+    # for the next scheduled approve/retry run to notice and request it.
+    # Any actor with write access can request auto-merge - doesn't need to be
+    # a separate identity, unlike approving.
+    if gh pr merge --auto --squash --repo rancher/rancher "$PR_URL" 2>&1; then
+      summary "  ✓ Auto-merge requested"
+    else
+      summary "  ⚠️  Failed to request auto-merge (PR still created, needs manual auto-merge or merge)"
+    fi
   else
     summary "  ⚠️  Failed to create PR (exit code: $PR_EXIT)"
     summary "    Error output:"
