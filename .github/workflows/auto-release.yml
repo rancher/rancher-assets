@@ -30,22 +30,22 @@ jobs:
         run: |
           echo "Detecting changed Dockerfiles between ${{ github.event.before }} and ${{ github.sha }}..."
 
-          CHANGED=$(./.github/scripts/detect-changed-dockerfiles.sh \
+          MINOR_VERSIONS=$(./.github/scripts/detect-changed-dockerfiles.sh \
             ${{ github.event.before }} \
             ${{ github.sha }})
 
-          if [ -z "$CHANGED" ]; then
+          if [ -z "$MINOR_VERSIONS" ]; then
             echo "No Dockerfiles changed"
             echo "has_changes=false" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          echo "Changed Dockerfiles:"
-          echo "$CHANGED"
+          echo "Changed minor versions:"
+          echo "$MINOR_VERSIONS"
           echo ""
 
-          echo "dockerfiles<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGED" >> $GITHUB_OUTPUT
+          echo "minor_versions<<EOF" >> $GITHUB_OUTPUT
+          echo "$MINOR_VERSIONS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           echo "has_changes=true" >> $GITHUB_OUTPUT
 
@@ -54,6 +54,28 @@ jobs:
         run: |
           echo "No Dockerfiles changed - skipping tag creation"
           exit 0
+
+      - name: Detect Prod/Dev Release
+        id: detect-release-type
+        if: steps.detect.outputs.has_changes == 'true'
+        run: |
+          CHARTS_RELEASE=$(./.github/scripts/detect-charts-release.sh \
+            ${{ github.event.before }} \
+            ${{ github.sha }} \
+            2.16)
+
+          PACKAGING_CHANGED=$(./.github/scripts/detect-changed-packaging.sh \
+            ${{ github.event.before }} \
+            ${{ github.sha }})
+
+          echo "charts_release=$CHARTS_RELEASE"
+          echo "packaging_changed=$PACKAGING_CHANGED"
+
+          if [ "$CHARTS_RELEASE" = "true" ] || [ "$PACKAGING_CHANGED" = "true" ]; then
+            echo "production_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "production_release=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Read GitHub App creds from Vault
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
