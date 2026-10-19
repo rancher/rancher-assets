@@ -6,30 +6,30 @@ chart-versions:
         upstream-refs:
             prod:
                 charts:
-                    fetched-at: 2026-10-16T11:13:07.362180987Z
+                    fetched-at: 2026-10-19T11:12:47.659077102Z
                     branch: release-v2.16
                     commit: 3d4d67c78546fdc2d83ca9eb4fa180d763c084ea
                 partner:
-                    fetched-at: 2026-10-16T11:13:07.645658104Z
+                    fetched-at: 2026-10-19T11:12:47.960452432Z
                     branch: main
-                    commit: b0116f55a3e7ef61da132089f094cf867dcb3676
+                    commit: 555658ffd1f86707e48839811e4ec14ebc33ecfb
                 rke2:
-                    fetched-at: 2026-10-16T11:13:07.87270459Z
+                    fetched-at: 2026-10-19T11:12:48.250332114Z
                     branch: main
-                    commit: e1580c0f8f8e591598b24b2908529aa0237e0e90
+                    commit: 6d71107154ed857c957fc55f216e891ea40cf535
             dev:
                 charts:
-                    fetched-at: 2026-10-16T11:13:08.071222805Z
+                    fetched-at: 2026-10-19T11:12:48.595128134Z
                     branch: dev-v2.16
                     commit: 3199e4472ccd48239ddac02a96c827443ef14bdd
                 partner:
-                    fetched-at: 2026-10-16T11:13:08.260857357Z
+                    fetched-at: 2026-10-19T11:12:48.949862255Z
                     branch: main
-                    commit: b0116f55a3e7ef61da132089f094cf867dcb3676
+                    commit: 555658ffd1f86707e48839811e4ec14ebc33ecfb
                 rke2:
-                    fetched-at: 2026-10-16T11:13:08.588797386Z
+                    fetched-at: 2026-10-19T11:12:49.26763825Z
                     branch: main
-                    commit: e1580c0f8f8e591598b24b2908529aa0237e0e90
+                    commit: 6d71107154ed857c957fc55f216e891ea40cf535
 base-image:
     bci-base: 16.0@sha256:c121aa8f01348b602e5b29b3e868693de3917cc15ab4735fcbd013ea159c426f
     bci-micro: 16.0@sha256:0a1b2222f55d4505ff50b9355a1877b07b5e442d7fd6efdc44b907cb0dd9572d
@@ -37,5 +37,5 @@ copy-script-hash: 9b9da8e26b3377be489743e5f7164394e3fb3c67ea134cb629ba1904f8cd80
 template-hashes:
     prod-template: 0fb565e5c14861121aee1c2c83f782065f936ffd88ee2c638a90800cab24ca76
     dev-template: 390c0a9cd21b47cea0ff7ee512f5f8efc0c87849fe5412a63a94743063b63593
-generated-at: 2026-10-16T11:13:08.588814628Z
+generated-at: 2026-10-19T11:12:49.267657356Z
 generator-version: v0.1.0
