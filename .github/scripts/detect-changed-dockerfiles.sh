@@ -4,7 +4,7 @@
 # Detects which Dockerfiles changed between two git refs.
 # Used by CI workflows to determine which images need to be built/released.
 #
-# Also flags every minor when lock.yaml's copy-script-hash changes. That hash
+# Also reports every Dockerfile when lock.yaml's copy-script-hash changes. That hash
 # tracks a script COPY'd into the image that the Dockerfile text does not
 # reference, so a script change would otherwise never alter a rendered
 # Dockerfile. Everything else in lock.yaml (upstream refs, base images,
@@ -39,38 +39,16 @@ CHANGED=$(
         "$FROM_REF..$TO_REF" -- dockerfiles/ | grep -E '^dockerfiles/Dockerfile\.' || true
 )
 
-# Create a Variable to store the Minors that Had changes
-CHANGED_MINORS=""
-
-# Add a minor to CHANGED_MINORS if not already recorded.
-add_minor() {
-    if ! echo "$CHANGED_MINORS" | grep -qw "$1"; then
-        CHANGED_MINORS="$CHANGED_MINORS $1"
-    fi
-}
-
-for dockerfile in $CHANGED; do
-    [ -z "$dockerfile" ] && continue
-
-    # Reuse the existing parser instead of re-deriving the prefix/-dev-suffix
-    # stripping here - it already knows the Dockerfile.X.XX[-dev] format and
-    # sets $RANCHER_MINOR / $BUILD_TYPE.
-    eval "$(./.github/scripts/parse-dockerfile-name.sh "$dockerfile")"
-
-    add_minor "$RANCHER_MINOR"
-done
-
 # Script copied into the image isn't referenced in the Dockerfile text; its
-# hash in lock.yaml is the only signal. Missing lock.yaml at a ref yields null.
+# hash in lock.yaml is the only signal. Missing lock.yaml at a ref yields empty.
 HASH_QUERY='.["copy-script-hash"]'
 FROM_HASH=$(git show "$FROM_REF:lock.yaml" 2>/dev/null | yq "$HASH_QUERY" || true)
 TO_HASH=$(git show "$TO_REF:lock.yaml" 2>/dev/null | yq "$HASH_QUERY" || true)
 
 if [ "$FROM_HASH" != "$TO_HASH" ]; then
-    # copy-script-hash is global: it affects every minor.
-    for minor in $(git show "$TO_REF:lock.yaml" | yq '.["chart-versions"] | keys | .[]'); do
-        add_minor "$minor"
-    done
+    # copy-script-hash is global: it affects every Dockerfile, prod and dev.
+    CHANGED=$(printf '%s\n%s\n' "$CHANGED" "$(ls dockerfiles/Dockerfile.* 2>/dev/null || true)")
 fi
 
-echo "$CHANGED_MINORS"
+# Output is one path per line (deduplicated), ready for iteration in workflows
+echo "$CHANGED" | grep -v '^$' | sort -u || true
