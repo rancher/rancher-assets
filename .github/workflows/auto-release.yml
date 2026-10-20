@@ -25,39 +25,34 @@ jobs:
           fetch-depth: 0  # Need full history to detect changes
           persist-credentials: false
 
-      - name: Detect changed Dockerfiles
+      - name: Detect release targets
         id: detect
         run: |
-          echo "Detecting changed Dockerfiles between ${{ github.event.before }} and ${{ github.sha }}..."
+          echo "Detecting release targets between ${{ github.event.before }} and ${{ github.sha }}..."
 
-          CHANGED=$(./.github/scripts/detect-changed-dockerfiles.sh \
+          # One "<minor> <build_type>" pair per line
+          RELEASE_TARGETS=$(./.github/scripts/detect-release-targets.sh \
             ${{ github.event.before }} \
             ${{ github.sha }})
 
-          if [ -z "$CHANGED" ]; then
-            echo "No Dockerfiles changed"
+          if [ -z "$RELEASE_TARGETS" ]; then
+            echo "No release targets"
             echo "has_changes=false" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          echo "Changed Dockerfiles:"
-          echo "$CHANGED"
+          echo "Release targets:"
+          echo "$RELEASE_TARGETS"
           echo ""
 
-          echo "dockerfiles<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGED" >> $GITHUB_OUTPUT
+          echo "release_targets<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_TARGETS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           echo "has_changes=true" >> $GITHUB_OUTPUT
 
-      - name: Exit if no changes
-        if: steps.detect.outputs.has_changes == 'false'
-        run: |
-          echo "No Dockerfiles changed - skipping tag creation"
-          exit 0
-
       - name: Read GitHub App creds from Vault
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
-        if: github.repository == 'rancher/rancher-assets'
+        if: steps.detect.outputs.has_changes == 'true' && github.repository == 'rancher/rancher-assets'
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/github/pr-actions-write-app/credentials appId | APP_ID ;
@@ -65,12 +60,14 @@ jobs:
 
       - name: Generate GitHub App Token
         id: app-token
+        if: steps.detect.outputs.has_changes == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ env.APP_ID }}
           private-key: ${{ env.PRIVATE_KEY }}
 
       - name: Checkout repository with app token
+        if: steps.detect.outputs.has_changes == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -83,41 +80,44 @@ jobs:
           git config user.name "eio-github-actions-power-enhancer[bot]"
           git config user.email "860038+eio-github-actions-power-enhancer[bot]@users.noreply.github.com"
 
-      - name: Create tags for each Dockerfile
+      - name: Create tags for each release target
         if: steps.detect.outputs.has_changes == 'true'
         id: create_tags
+        env:
+          RELEASE_TARGETS: ${{ steps.detect.outputs.release_targets }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
-          COMMIT_SHA="${{ github.sha }}"
-          TAGS=()
+          # Each target is "<minor> <build_type>". Prod only when rancher-charts' prod
+          # commit moved; everything else is dev (see detect-release-targets.sh).
+          # To ship a prod image for any other reason, push a prod CalVer tag by hand;
+          # release.yml builds any v* tag.
+          DOCKERFILES=""
 
-          echo "Creating CalVer tags for changed Dockerfiles..."
-          echo ""
+          while read -r minor type; do
+            [ -z "$minor" ] && continue
 
-          echo "${{ steps.detect.outputs.dockerfiles }}" | while IFS= read -r dockerfile; do
-            if [ -z "$dockerfile" ]; then
+            dockerfile="dockerfiles/Dockerfile.$minor"
+            [ "$type" = "dev" ] && dockerfile="$dockerfile-dev"
+
+            if [ ! -f "$dockerfile" ]; then
+              echo "Skipping $dockerfile (not found)"
               continue
             fi
 
-            echo "Processing: $dockerfile"
-
             eval $(./.github/scripts/parse-dockerfile-name.sh "$dockerfile")
-            echo "  Rancher Minor: $RANCHER_MINOR"
-            echo "  Build Type: $BUILD_TYPE"
 
             TAG=$(./.github/scripts/generate-calver-tag.sh \
               "$RANCHER_MINOR" \
               "$BUILD_TYPE" \
               "$COMMIT_SHA")
-            echo "  Tag: $TAG"
+            echo "$dockerfile -> $TAG"
 
             ./.github/scripts/create-tag.sh "$TAG" "$COMMIT_SHA" "$dockerfile"
+            DOCKERFILES="$DOCKERFILES$dockerfile"$'\n'
+          done <<< "$RELEASE_TARGETS"
 
-            TAGS+=("$TAG")
-            echo ""
-          done
-
-          echo "tags<<EOF" >> $GITHUB_OUTPUT
-          printf '%s\n' "${TAGS[@]}" >> $GITHUB_OUTPUT
+          echo "dockerfiles<<EOF" >> $GITHUB_OUTPUT
+          printf '%s' "$DOCKERFILES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Push all tags atomically
@@ -158,9 +158,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "These tags will trigger the [release workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/release.yml) to build Docker images." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Changed Dockerfiles" >> $GITHUB_STEP_SUMMARY
+          echo "### Tagged Dockerfiles" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.detect.outputs.dockerfiles }}" | while read dockerfile; do
+          echo "${{ steps.create_tags.outputs.dockerfiles }}" | while read dockerfile; do
             if [ -n "$dockerfile" ]; then
               echo "- \`$dockerfile\`" >> $GITHUB_STEP_SUMMARY
             fi

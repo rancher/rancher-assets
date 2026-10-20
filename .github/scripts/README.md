@@ -8,8 +8,11 @@ Scripts in this directory are the canonical implementations used by GitHub Actio
 
 ### Change Detection
 
-**`detect-changed-dockerfiles.sh`** - Detects which Dockerfiles changed between git refs
-- Used by: `pr-smoke-test.yml`, `auto-release.yml`
+**`detect-changed-dockerfiles.sh`** - Detects which Dockerfiles (or their inputs) changed between git refs, one path per line. A `copy-script-hash` change in `lock.yaml` reports every Dockerfile, since the copy script is not rendered into the Dockerfile text.
+- Used by: `pr-smoke-test.yml`, `detect-release-targets.sh`
+
+**`detect-release-targets.sh`** - Reduces the changed Dockerfiles to one `<minor> <build_type>` pair per minor. `prod` only when the rancher-charts prod commit moved in `lock.yaml`; otherwise `dev`. A prod release for any other reason is a manually pushed prod tag.
+- Used by: `auto-release.yml`
 
 **`parse-dockerfile-name.sh`** - Extracts Rancher minor and build type from Dockerfile paths
 - Used by: `pr-smoke-test.yml`, `auto-release.yml`
