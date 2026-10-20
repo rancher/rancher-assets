@@ -6,28 +6,28 @@ chart-versions:
         upstream-refs:
             prod:
                 charts:
-                    fetched-at: 2026-10-19T11:12:47.659077102Z
+                    fetched-at: 2026-10-20T11:13:36.071116657Z
                     branch: release-v2.16
-                    commit: 3d4d67c78546fdc2d83ca9eb4fa180d763c084ea
+                    commit: dd0de8f5e43e2b25f24edb668beac976995332ca
                 partner:
-                    fetched-at: 2026-10-19T11:12:47.960452432Z
+                    fetched-at: 2026-10-20T11:13:36.219738742Z
                     branch: main
-                    commit: 555658ffd1f86707e48839811e4ec14ebc33ecfb
+                    commit: ba881af1cc1e817fc2990cceff1f48688e54083c
                 rke2:
-                    fetched-at: 2026-10-19T11:12:48.250332114Z
+                    fetched-at: 2026-10-20T11:13:36.367122715Z
                     branch: main
                     commit: 6d71107154ed857c957fc55f216e891ea40cf535
             dev:
                 charts:
-                    fetched-at: 2026-10-19T11:12:48.595128134Z
+                    fetched-at: 2026-10-20T11:13:36.520622049Z
                     branch: dev-v2.16
-                    commit: 3199e4472ccd48239ddac02a96c827443ef14bdd
+                    commit: 3f1c9f968dd91d6e1154dbe55ff52b627f4beb46
                 partner:
-                    fetched-at: 2026-10-19T11:12:48.949862255Z
+                    fetched-at: 2026-10-20T11:13:36.675995389Z
                     branch: main
-                    commit: 555658ffd1f86707e48839811e4ec14ebc33ecfb
+                    commit: ba881af1cc1e817fc2990cceff1f48688e54083c
                 rke2:
-                    fetched-at: 2026-10-19T11:12:49.26763825Z
+                    fetched-at: 2026-10-20T11:13:36.822020188Z
                     branch: main
                     commit: 6d71107154ed857c957fc55f216e891ea40cf535
 base-image:
@@ -37,5 +37,5 @@ copy-script-hash: 9b9da8e26b3377be489743e5f7164394e3fb3c67ea134cb629ba1904f8cd80
 template-hashes:
     prod-template: 0fb565e5c14861121aee1c2c83f782065f936ffd88ee2c638a90800cab24ca76
     dev-template: 390c0a9cd21b47cea0ff7ee512f5f8efc0c87849fe5412a63a94743063b63593
-generated-at: 2026-10-19T11:12:49.267657356Z
+generated-at: 2026-10-20T11:13:36.822037554Z
 generator-version: v0.1.0
