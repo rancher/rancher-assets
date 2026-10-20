@@ -3,11 +3,10 @@
 #
 # PROD Dockerfile - uses stable/release branches and commits
 
-FROM registry.suse.com/bci/bci-base:16.0@sha256:c121aa8f01348b602e5b29b3e868693de3917cc15ab4735fcbd013ea159c426f AS builder
-RUN zypper refresh && zypper -n install git-core
+FROM registry.suse.com/suse/git:2@sha256:f2f9e6b135afa69783e51ac075d8adbdea64a52f452a9188aae14a39994bc063 AS git
 
 # Clone rancher-charts repository (PROD)
-FROM builder AS rancher-charts
+FROM git AS rancher-charts
 RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git config --global url."https://github.com/rancher/".insteadOf https://git.rancher.io/ && \
     git init /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721 && \
@@ -17,7 +16,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git checkout FETCH_HEAD
 
 # Clone partner-charts repository (PROD)
-FROM builder AS partner-charts
+FROM git AS partner-charts
 RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git config --global url."https://github.com/rancher/".insteadOf https://git.rancher.io/ && \
     git init /var/lib/rancher-data/local-catalogs/v2/rancher-partner-charts/8f17acdce9bffd6e05a58a3798840e408c4ea71783381ecd2e9af30baad65974 && \
@@ -27,7 +26,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git checkout FETCH_HEAD
 
 # Clone rke2-charts repository (PROD)
-FROM builder AS rke2-charts
+FROM git AS rke2-charts
 RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git config --global url."https://github.com/rancher/".insteadOf https://git.rancher.io/ && \
     git init /var/lib/rancher-data/local-catalogs/v2/rancher-rke2-charts/675f1b63a0a83905972dcab2794479ed599a6f41b86cd6193d69472d0fa889c9 && \

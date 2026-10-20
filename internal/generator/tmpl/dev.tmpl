@@ -3,11 +3,10 @@
 #
 # DEV Dockerfile - uses dev branches and commits
 
-FROM registry.suse.com/bci/bci-base:{{.BciBaseVersion}} AS builder
-RUN zypper refresh && zypper -n install git-core
+FROM registry.suse.com/suse/git:{{.GitImageVersion}} AS git
 
 # Clone rancher-charts repository (DEV)
-FROM builder AS rancher-charts
+FROM git AS rancher-charts
 RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git config --global url."https://github.com/rancher/".insteadOf https://git.rancher.io/ && \
     git init {{(index .ClusterRepos "charts").Path}} && \
@@ -17,7 +16,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git checkout FETCH_HEAD
 
 # Clone partner-charts repository (DEV)
-FROM builder AS partner-charts
+FROM git AS partner-charts
 RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git config --global url."https://github.com/rancher/".insteadOf https://git.rancher.io/ && \
     git init {{(index .ClusterRepos "partner").Path}} && \
@@ -27,7 +26,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git checkout FETCH_HEAD
 
 # Clone rke2-charts repository (DEV)
-FROM builder AS rke2-charts
+FROM git AS rke2-charts
 RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git config --global url."https://github.com/rancher/".insteadOf https://git.rancher.io/ && \
     git init {{(index .ClusterRepos "rke2").Path}} && \
