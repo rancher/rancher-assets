@@ -32,6 +32,10 @@ mkdir -p "${DEST_DIR}"
 # Copy charts to destination
 echo "Copying charts..."
 cp -ar "${SOURCE_DIR}"/* "${DEST_DIR}"/
+for d in "${DEST_DIR}"/*/*/.git; do
+  [ -d "$d" ] || continue
+  git -C "$(dirname $d)" checkout -q FETCH_HEAD
+done
 
 echo "✓ Charts copied successfully"
 echo ""

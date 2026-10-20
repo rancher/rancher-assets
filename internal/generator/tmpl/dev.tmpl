@@ -12,8 +12,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git init {{(index .ClusterRepos "charts").Path}} && \
     cd {{(index .ClusterRepos "charts").Path}} && \
     git remote add origin {{(index .ClusterRepos "charts").URL}} && \
-    git fetch --depth 1 origin {{.DevChartCommit}} && \
-    git checkout FETCH_HEAD
+    git fetch --depth 1 origin {{.DevChartCommit}}
 
 # Clone partner-charts repository (DEV)
 FROM git AS partner-charts
@@ -22,8 +21,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git init {{(index .ClusterRepos "partner").Path}} && \
     cd {{(index .ClusterRepos "partner").Path}} && \
     git remote add origin {{(index .ClusterRepos "partner").URL}} && \
-    git fetch --depth 1 origin {{.DevPartnerCommit}} && \
-    git checkout FETCH_HEAD
+    git fetch --depth 1 origin {{.DevPartnerCommit}}
 
 # Clone rke2-charts repository (DEV)
 FROM git AS rke2-charts
@@ -32,11 +30,10 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git init {{(index .ClusterRepos "rke2").Path}} && \
     cd {{(index .ClusterRepos "rke2").Path}} && \
     git remote add origin {{(index .ClusterRepos "rke2").URL}} && \
-    git fetch --depth 1 origin {{.DevRke2Commit}} && \
-    git checkout FETCH_HEAD
+    git fetch --depth 1 origin {{.DevRke2Commit}}
 
 # Consolidated charts image
-FROM registry.suse.com/bci/bci-micro:{{.BciMicroVersion}}
+FROM git AS final
 
 # Copy chart repositories
 COPY --from=rancher-charts {{(index .ClusterRepos "charts").Path}} {{(index .ClusterRepos "charts").Path}}
