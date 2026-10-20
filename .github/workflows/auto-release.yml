@@ -50,15 +50,9 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
           echo "has_changes=true" >> $GITHUB_OUTPUT
 
-      - name: Exit if no changes
-        if: steps.detect.outputs.has_changes == 'false'
-        run: |
-          echo "No release targets - skipping tag creation"
-          exit 0
-
       - name: Read GitHub App creds from Vault
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
-        if: github.repository == 'rancher/rancher-assets'
+        if: steps.detect.outputs.has_changes == 'true' && github.repository == 'rancher/rancher-assets'
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/github/pr-actions-write-app/credentials appId | APP_ID ;
@@ -66,12 +60,14 @@ jobs:
 
       - name: Generate GitHub App Token
         id: app-token
+        if: steps.detect.outputs.has_changes == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ env.APP_ID }}
           private-key: ${{ env.PRIVATE_KEY }}
 
       - name: Checkout repository with app token
+        if: steps.detect.outputs.has_changes == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
