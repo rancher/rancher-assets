@@ -31,7 +31,7 @@ mkdir -p "${DEST_DIR}"
 
 # Copy charts to destination
 echo "Copying charts..."
-cp -r "${SOURCE_DIR}"/* "${DEST_DIR}"/
+cp -ar "${SOURCE_DIR}"/* "${DEST_DIR}"/
 
 echo "✓ Charts copied successfully"
 echo ""
