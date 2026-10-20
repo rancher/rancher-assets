@@ -55,28 +55,6 @@ jobs:
           echo "No Dockerfiles changed - skipping tag creation"
           exit 0
 
-      - name: Detect Prod/Dev Release
-        id: detect-release-type
-        if: steps.detect.outputs.has_changes == 'true'
-        run: |
-          CHARTS_RELEASE=$(./.github/scripts/detect-charts-release.sh \
-            ${{ github.event.before }} \
-            ${{ github.sha }} \
-            2.16)
-
-          PACKAGING_CHANGED=$(./.github/scripts/detect-changed-packaging.sh \
-            ${{ github.event.before }} \
-            ${{ github.sha }})
-
-          echo "charts_release=$CHARTS_RELEASE"
-          echo "packaging_changed=$PACKAGING_CHANGED"
-
-          if [ "$CHARTS_RELEASE" = "true" ] || [ "$PACKAGING_CHANGED" = "true" ]; then
-            echo "production_release=true" >> $GITHUB_OUTPUT
-          else
-            echo "production_release=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Read GitHub App creds from Vault
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         if: github.repository == 'rancher/rancher-assets'
@@ -105,41 +83,57 @@ jobs:
           git config user.name "eio-github-actions-power-enhancer[bot]"
           git config user.email "860038+eio-github-actions-power-enhancer[bot]@users.noreply.github.com"
 
-      - name: Create tags for each Dockerfile
+      - name: Create tags for each changed minor
         if: steps.detect.outputs.has_changes == 'true'
         id: create_tags
+        env:
+          MINOR_VERSIONS: ${{ steps.detect.outputs.minor_versions }}
+          BEFORE_SHA: ${{ github.event.before }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
-          COMMIT_SHA="${{ github.sha }}"
-          TAGS=()
+          # Which image type to tag, per minor:
+          #   rancher-charts prod commit moved -> prod
+          #   anything else (partner/rke2 moves, copy script, base image, templates) -> dev
+          # partner/rke2 share a branch between prod and dev, so only rancher-charts
+          # moving says anything about a production release. To ship a prod image for
+          # any other reason, push a prod CalVer tag by hand; release.yml builds any v* tag.
+          DOCKERFILES=""
 
-          echo "Creating CalVer tags for changed Dockerfiles..."
-          echo ""
+          for minor in $MINOR_VERSIONS; do
+            CHARTS_RELEASE=$(./.github/scripts/detect-charts-release.sh \
+              "$BEFORE_SHA" "$COMMIT_SHA" "$minor")
 
-          echo "${{ steps.detect.outputs.dockerfiles }}" | while IFS= read -r dockerfile; do
-            if [ -z "$dockerfile" ]; then
-              continue
+            if [ "$CHARTS_RELEASE" = "true" ]; then
+              TYPES="prod"
+            else
+              TYPES="dev"
             fi
+            echo "Minor $minor: charts_release=$CHARTS_RELEASE -> $TYPES"
 
-            echo "Processing: $dockerfile"
+            for type in $TYPES; do
+              dockerfile="dockerfiles/Dockerfile.$minor"
+              [ "$type" = "dev" ] && dockerfile="$dockerfile-dev"
 
-            eval $(./.github/scripts/parse-dockerfile-name.sh "$dockerfile")
-            echo "  Rancher Minor: $RANCHER_MINOR"
-            echo "  Build Type: $BUILD_TYPE"
+              if [ ! -f "$dockerfile" ]; then
+                echo "  Skipping $dockerfile (not found)"
+                continue
+              fi
 
-            TAG=$(./.github/scripts/generate-calver-tag.sh \
-              "$RANCHER_MINOR" \
-              "$BUILD_TYPE" \
-              "$COMMIT_SHA")
-            echo "  Tag: $TAG"
+              eval $(./.github/scripts/parse-dockerfile-name.sh "$dockerfile")
 
-            ./.github/scripts/create-tag.sh "$TAG" "$COMMIT_SHA" "$dockerfile"
+              TAG=$(./.github/scripts/generate-calver-tag.sh \
+                "$RANCHER_MINOR" \
+                "$BUILD_TYPE" \
+                "$COMMIT_SHA")
+              echo "  $dockerfile -> $TAG"
 
-            TAGS+=("$TAG")
-            echo ""
+              ./.github/scripts/create-tag.sh "$TAG" "$COMMIT_SHA" "$dockerfile"
+              DOCKERFILES="$DOCKERFILES$dockerfile"$'\n'
+            done
           done
 
-          echo "tags<<EOF" >> $GITHUB_OUTPUT
-          printf '%s\n' "${TAGS[@]}" >> $GITHUB_OUTPUT
+          echo "dockerfiles<<EOF" >> $GITHUB_OUTPUT
+          printf '%s' "$DOCKERFILES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Push all tags atomically
@@ -180,9 +174,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "These tags will trigger the [release workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/release.yml) to build Docker images." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Changed Dockerfiles" >> $GITHUB_STEP_SUMMARY
+          echo "### Tagged Dockerfiles" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.detect.outputs.dockerfiles }}" | while read dockerfile; do
+          echo "${{ steps.create_tags.outputs.dockerfiles }}" | while read dockerfile; do
             if [ -n "$dockerfile" ]; then
               echo "- \`$dockerfile\`" >> $GITHUB_STEP_SUMMARY
             fi

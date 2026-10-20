@@ -10,39 +10,48 @@
 # detect-changed-dockerfiles.sh, which only tells you the Dockerfile text
 # changed - not why.
 #
-# Usage: detect-charts-release.sh <from_ref> <to_ref> <minor>
-# Output: "true" if rancher-charts' prod commit moved, "false" otherwise.
+# Usage: detect-charts-release.sh <from_ref> <to_ref> <minors>
+#   <minors> is one or more minors separated by whitespace/newlines, as
+#   emitted by detect-changed-dockerfiles.sh.
+# Output: "true" if rancher-charts' prod commit moved for ANY of the given
+#         minors, "false" otherwise.
 #
 # Examples:
 #   ./detect-charts-release.sh HEAD^ HEAD 2.16
 #   ./detect-charts-release.sh ${{ github.event.before }} ${{ github.sha }} 2.16
+#   ./detect-charts-release.sh HEAD^ HEAD "$(./detect-changed-dockerfiles.sh HEAD^ HEAD)"
 
 set -e
 
 if [ "$#" -ne 3 ]; then
-    echo "Usage: $0 <from_ref> <to_ref> <minor>" >&2
+    echo "Usage: $0 <from_ref> <to_ref> <minors>" >&2
     echo "Example: $0 HEAD^ HEAD 2.16" >&2
     exit 1
 fi
 
 FROM_REF="$1"
 TO_REF="$2"
-MINOR="$3"
+MINORS="$3"
 
 echo "FROM_REF: "  ${FROM_REF} >&2
 echo "TO_REF: " ${TO_REF} >&2
-echo "MINOR: " ${MINOR} >&2
+echo "MINORS: " ${MINORS} >&2
 
-QUERY=".chart-versions.\"${MINOR}\".upstream-refs.prod.charts.commit"
+RESULT=false
 
-BEFORE_COMMIT=$(git show "${FROM_REF}:lock.yaml" | yq "$QUERY")
-AFTER_COMMIT=$(git show "${TO_REF}:lock.yaml" | yq "$QUERY")
+# Intentionally unquoted: split MINORS on whitespace/newlines
+for MINOR in ${MINORS}; do
+    QUERY=".chart-versions.\"${MINOR}\".upstream-refs.prod.charts.commit"
 
-echo "BEFORE_COMMIT: " ${BEFORE_COMMIT} >&2
-echo "AFTER_COMMIT: " ${AFTER_COMMIT} >&2
+    BEFORE_COMMIT=$(git show "${FROM_REF}:lock.yaml" | yq "$QUERY")
+    AFTER_COMMIT=$(git show "${TO_REF}:lock.yaml" | yq "$QUERY")
 
-if [ "$BEFORE_COMMIT" != "$AFTER_COMMIT" ]; then
-    echo "true"
-else
-    echo "false"
-fi
+    echo "${MINOR} BEFORE_COMMIT: " ${BEFORE_COMMIT} >&2
+    echo "${MINOR} AFTER_COMMIT: " ${AFTER_COMMIT} >&2
+
+    if [ "$BEFORE_COMMIT" != "$AFTER_COMMIT" ]; then
+        RESULT=true
+    fi
+done
+
+echo "$RESULT"
