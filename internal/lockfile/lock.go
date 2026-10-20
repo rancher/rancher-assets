@@ -22,7 +22,7 @@ type Lock struct {
 type BaseImageLock struct {
 	BCIBase  string `yaml:"bci-base"`
 	BCIMicro string `yaml:"bci-micro"`
-	Git string `yaml:"git"`
+	Git      string `yaml:"git"`
 }
 
 // TemplateHashes tracks hashes of template files for reproducibility
