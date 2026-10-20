@@ -1,8 +1,5 @@
 chart-versions:
     "2.16":
-        latest-stable: null
-        latest-prerelease: null
-        updated-at: null
         upstream-refs:
             prod:
                 charts:

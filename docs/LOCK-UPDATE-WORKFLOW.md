@@ -450,7 +450,7 @@ chart-versions:
 - `prod` refs are used for stable builds (CalVer without `-dev` suffix: `v2.15-20260805T1600Z`)
 - `dev` refs are used for prerelease builds (CalVer with `-dev` suffix: `v2.15-20260716T1430Z-dev`)
 - `commit` is the upstream SHA that will be bundled
-- `fetched-at` is just a timestamp (doesn't affect builds)
+- `fetched-at` is when this commit was first observed (doesn't affect builds); updates that find the same commit leave it, and the file, untouched
 - `make generate` queries the upstream repos and updates these commits
 - **CalVer versions are NOT stored in lock.yaml** - they're generated on-demand with current UTC timestamp
 
@@ -632,7 +632,6 @@ go run main.go generate --pin-commits='{"v1": {"prod": {"charts": "abc123"}}}'
 **Check for:**
 - Commits exist in upstream repos
 - Branches match config.yaml
-- Timestamps are recent (warn if > 7 days old)
 
 **Impact:** Catch configuration drift and stale lock files
 
