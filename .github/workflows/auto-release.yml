@@ -25,34 +25,35 @@ jobs:
           fetch-depth: 0  # Need full history to detect changes
           persist-credentials: false
 
-      - name: Detect changed Dockerfiles
+      - name: Detect release targets
         id: detect
         run: |
-          echo "Detecting changed Dockerfiles between ${{ github.event.before }} and ${{ github.sha }}..."
+          echo "Detecting release targets between ${{ github.event.before }} and ${{ github.sha }}..."
 
-          MINOR_VERSIONS=$(./.github/scripts/detect-changed-dockerfiles.sh \
+          # One "<minor> <build_type>" pair per line
+          RELEASE_TARGETS=$(./.github/scripts/detect-release-targets.sh \
             ${{ github.event.before }} \
             ${{ github.sha }})
 
-          if [ -z "$MINOR_VERSIONS" ]; then
-            echo "No Dockerfiles changed"
+          if [ -z "$RELEASE_TARGETS" ]; then
+            echo "No release targets"
             echo "has_changes=false" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          echo "Changed minor versions:"
-          echo "$MINOR_VERSIONS"
+          echo "Release targets:"
+          echo "$RELEASE_TARGETS"
           echo ""
 
-          echo "minor_versions<<EOF" >> $GITHUB_OUTPUT
-          echo "$MINOR_VERSIONS" >> $GITHUB_OUTPUT
+          echo "release_targets<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_TARGETS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           echo "has_changes=true" >> $GITHUB_OUTPUT
 
       - name: Exit if no changes
         if: steps.detect.outputs.has_changes == 'false'
         run: |
-          echo "No Dockerfiles changed - skipping tag creation"
+          echo "No release targets - skipping tag creation"
           exit 0
 
       - name: Read GitHub App creds from Vault
@@ -83,54 +84,41 @@ jobs:
           git config user.name "eio-github-actions-power-enhancer[bot]"
           git config user.email "860038+eio-github-actions-power-enhancer[bot]@users.noreply.github.com"
 
-      - name: Create tags for each changed minor
+      - name: Create tags for each release target
         if: steps.detect.outputs.has_changes == 'true'
         id: create_tags
         env:
-          MINOR_VERSIONS: ${{ steps.detect.outputs.minor_versions }}
-          BEFORE_SHA: ${{ github.event.before }}
+          RELEASE_TARGETS: ${{ steps.detect.outputs.release_targets }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          # Which image type to tag, per minor:
-          #   rancher-charts prod commit moved -> prod
-          #   anything else (partner/rke2 moves, copy script, base image, templates) -> dev
-          # partner/rke2 share a branch between prod and dev, so only rancher-charts
-          # moving says anything about a production release. To ship a prod image for
-          # any other reason, push a prod CalVer tag by hand; release.yml builds any v* tag.
+          # Each target is "<minor> <build_type>". Prod only when rancher-charts' prod
+          # commit moved; everything else is dev (see detect-release-targets.sh).
+          # To ship a prod image for any other reason, push a prod CalVer tag by hand;
+          # release.yml builds any v* tag.
           DOCKERFILES=""
 
-          for minor in $MINOR_VERSIONS; do
-            CHARTS_RELEASE=$(./.github/scripts/detect-charts-release.sh \
-              "$BEFORE_SHA" "$COMMIT_SHA" "$minor")
+          while read -r minor type; do
+            [ -z "$minor" ] && continue
 
-            if [ "$CHARTS_RELEASE" = "true" ]; then
-              TYPES="prod"
-            else
-              TYPES="dev"
+            dockerfile="dockerfiles/Dockerfile.$minor"
+            [ "$type" = "dev" ] && dockerfile="$dockerfile-dev"
+
+            if [ ! -f "$dockerfile" ]; then
+              echo "Skipping $dockerfile (not found)"
+              continue
             fi
-            echo "Minor $minor: charts_release=$CHARTS_RELEASE -> $TYPES"
 
-            for type in $TYPES; do
-              dockerfile="dockerfiles/Dockerfile.$minor"
-              [ "$type" = "dev" ] && dockerfile="$dockerfile-dev"
+            eval $(./.github/scripts/parse-dockerfile-name.sh "$dockerfile")
 
-              if [ ! -f "$dockerfile" ]; then
-                echo "  Skipping $dockerfile (not found)"
-                continue
-              fi
+            TAG=$(./.github/scripts/generate-calver-tag.sh \
+              "$RANCHER_MINOR" \
+              "$BUILD_TYPE" \
+              "$COMMIT_SHA")
+            echo "$dockerfile -> $TAG"
 
-              eval $(./.github/scripts/parse-dockerfile-name.sh "$dockerfile")
-
-              TAG=$(./.github/scripts/generate-calver-tag.sh \
-                "$RANCHER_MINOR" \
-                "$BUILD_TYPE" \
-                "$COMMIT_SHA")
-              echo "  $dockerfile -> $TAG"
-
-              ./.github/scripts/create-tag.sh "$TAG" "$COMMIT_SHA" "$dockerfile"
-              DOCKERFILES="$DOCKERFILES$dockerfile"$'\n'
-            done
-          done
+            ./.github/scripts/create-tag.sh "$TAG" "$COMMIT_SHA" "$dockerfile"
+            DOCKERFILES="$DOCKERFILES$dockerfile"$'\n'
+          done <<< "$RELEASE_TARGETS"
 
           echo "dockerfiles<<EOF" >> $GITHUB_OUTPUT
           printf '%s' "$DOCKERFILES" >> $GITHUB_OUTPUT
