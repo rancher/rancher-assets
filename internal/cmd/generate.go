@@ -179,11 +179,16 @@ func Generate(ctx context.Context, args []string) error {
 			devRefs.RKE2 = rke2Ref
 
 			// Update lock file with both prod and dev refs
-			if err := lock.UpdateUpstreamRefs(major, prodRefs, devRefs); err != nil {
+			refsChanged, err := lock.UpdateUpstreamRefs(major, prodRefs, devRefs)
+			if err != nil {
 				return fmt.Errorf("failed to update lock file: %w", err)
 			}
+			if refsChanged {
+				lockChanged = true
+			} else {
+				logger.Info("    upstream refs unchanged")
+			}
 		}
-		lockChanged = true
 	} else {
 		logger.Info("\nUsing existing upstream refs (use --update to query remote repos)")
 	}

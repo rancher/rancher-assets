@@ -32,10 +32,7 @@ type TemplateHashes struct {
 
 // ChartVersionLock tracks state for a single Rancher minor version
 type ChartVersionLock struct {
-	LatestStable     *string             `yaml:"latest-stable"`
-	LatestPrerelease *string             `yaml:"latest-prerelease"`
-	UpdatedAt        *time.Time          `yaml:"updated-at"`
-	UpstreamRefs     UpstreamRefsByBuild `yaml:"upstream-refs"`
+	UpstreamRefs UpstreamRefsByBuild `yaml:"upstream-refs"`
 }
 
 // UpstreamRefsByBuild separates prod and dev upstream refs
@@ -53,6 +50,8 @@ type UpstreamRefsSet struct {
 
 // UpstreamRef tracks an upstream repository reference
 type UpstreamRef struct {
+	// FetchedAt is when this branch/commit pair was first observed. It is
+	// preserved across updates that find the same commit.
 	FetchedAt *time.Time `yaml:"fetched-at"`
 	Branch    string     `yaml:"branch"`
 	Commit    string     `yaml:"commit"`
@@ -102,8 +101,10 @@ func (l *Lock) Save(path string) error {
 	return nil
 }
 
-// UpdateUpstreamRefs updates upstream commit references for a Rancher minor version
-func (l *Lock) UpdateUpstreamRefs(major string, prodRefs, devRefs UpstreamRefsSet) error {
+// UpdateUpstreamRefs updates upstream commit references for a Rancher minor version.
+// Refs whose branch and commit are unchanged keep their existing FetchedAt.
+// It reports whether anything changed.
+func (l *Lock) UpdateUpstreamRefs(major string, prodRefs, devRefs UpstreamRefsSet) (bool, error) {
 	chartLock, exists := l.ChartVersions[major]
 	if !exists {
 		// Initialize new chart version lock entry
@@ -112,12 +113,29 @@ func (l *Lock) UpdateUpstreamRefs(major string, prodRefs, devRefs UpstreamRefsSe
 		}
 	}
 
-	// Update prod and dev refs
-	chartLock.UpstreamRefs.Prod = prodRefs
-	chartLock.UpstreamRefs.Dev = devRefs
+	prod, prodChanged := mergeRefsSet(chartLock.UpstreamRefs.Prod, prodRefs)
+	dev, devChanged := mergeRefsSet(chartLock.UpstreamRefs.Dev, devRefs)
+	chartLock.UpstreamRefs.Prod = prod
+	chartLock.UpstreamRefs.Dev = dev
 
 	l.ChartVersions[major] = chartLock
-	return nil
+	return !exists || prodChanged || devChanged, nil
+}
+
+func mergeRefsSet(old, fresh UpstreamRefsSet) (UpstreamRefsSet, bool) {
+	charts, c1 := mergeRef(old.Charts, fresh.Charts)
+	partner, c2 := mergeRef(old.Partner, fresh.Partner)
+	rke2, c3 := mergeRef(old.RKE2, fresh.RKE2)
+	return UpstreamRefsSet{Charts: charts, Partner: partner, RKE2: rke2}, c1 || c2 || c3
+}
+
+// mergeRef returns old if it points at the same branch and commit as fresh,
+// otherwise fresh.
+func mergeRef(old, fresh UpstreamRef) (UpstreamRef, bool) {
+	if old.FetchedAt != nil && old.Branch == fresh.Branch && old.Commit == fresh.Commit {
+		return old, false
+	}
+	return fresh, true
 }
 
 // EnsureChartVersion ensures a chart version entry exists in the lock
