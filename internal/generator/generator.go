@@ -13,6 +13,7 @@ import (
 type TemplateData struct {
 	BciBaseVersion  string
 	BciMicroVersion string
+	GitImageVersion string
 	RancherMinor    string
 
 	// Dev configuration
@@ -59,6 +60,7 @@ func Generate(cfg *config.Config, lock *lockfile.Lock, minor, outputDir string) 
 	data := TemplateData{
 		BciBaseVersion:  cfg.BaseImage.BCIBaseVersion,
 		BciMicroVersion: cfg.BaseImage.BCIMicroVersion,
+		GitImageVersion: cfg.BaseImage.GitImageVersion,
 		RancherMinor:    minor,
 		RancherVersion:  rancherVersion,
 		ClusterRepos:    cfg.ClusterRepos,

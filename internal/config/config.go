@@ -31,6 +31,7 @@ type BuildConfig struct {
 
 // BaseImageConfig defines base image versions
 type BaseImageConfig struct {
+	GitImageVersion string `yaml:"git"`
 	BCIBaseVersion  string `yaml:"bci-base"`
 	BCIMicroVersion string `yaml:"bci-micro"`
 }

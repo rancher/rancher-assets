@@ -106,6 +106,10 @@ func Generate(ctx context.Context, args []string) error {
 		lock.BaseImage.BCIMicro = cfg.BaseImage.BCIMicroVersion
 		lockChanged = true
 	}
+	if lock.BaseImage.Git != cfg.BaseImage.GitImageVersion {
+		lock.BaseImage.Git = cfg.BaseImage.GitImageVersion
+		lockChanged = true
+	}
 
 	if *update {
 		for _, major := range majors {
