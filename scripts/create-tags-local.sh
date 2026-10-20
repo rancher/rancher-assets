@@ -5,7 +5,8 @@
 # for local development use.
 #
 # Usage:
-#   # Auto-detect changed Dockerfiles (origin/main..HEAD)
+#   # Auto-detect release targets (origin/main..HEAD): one tag per changed minor,
+#   # prod if rancher-charts' prod commit moved, dev otherwise (same as CI)
 #   ./scripts/create-tags-local.sh [--push]
 #
 #   # Specify commit range
@@ -89,24 +90,28 @@ if [[ ${#DOCKERFILES[@]} -eq 0 ]]; then
         TO_REF="HEAD"
     fi
 
-    echo "Detecting changed Dockerfiles between $FROM_REF and $TO_REF..."
-    CHANGED=$("$GITHUB_SCRIPTS/detect-changed-dockerfiles.sh" "$FROM_REF" "$TO_REF")
+    echo "Detecting release targets between $FROM_REF and $TO_REF..."
+    # One "<minor> <build_type>" pair per line, same rule as CI:
+    # prod only when rancher-charts' prod commit moved, dev otherwise.
+    TARGETS=$("$GITHUB_SCRIPTS/detect-release-targets.sh" "$FROM_REF" "$TO_REF")
 
-    if [[ -z "$CHANGED" ]]; then
-        echo "No Dockerfiles changed"
+    if [[ -z "$TARGETS" ]]; then
+        echo "No release targets"
         exit 0
     fi
 
-    echo "Changed Dockerfiles:"
-    echo "$CHANGED"
+    echo "Release targets:"
+    echo "$TARGETS"
     echo ""
 
-    # Convert to array
-    while IFS= read -r line; do
-        if [[ -n "$line" ]]; then
-            DOCKERFILES+=("$line")
+    # Convert "<minor> <build_type>" pairs to Dockerfile paths
+    while read -r minor type; do
+        if [[ -n "$minor" ]]; then
+            dockerfile="dockerfiles/Dockerfile.$minor"
+            [[ "$type" == "dev" ]] && dockerfile="$dockerfile-dev"
+            DOCKERFILES+=("$dockerfile")
         fi
-    done <<< "$CHANGED"
+    done <<< "$TARGETS"
 else
     # Explicit mode
     echo "Creating tags for specified Dockerfiles:"
