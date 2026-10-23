@@ -78,7 +78,7 @@ echo "Checking out repo contents..."
 for catalog_dir in "$TEMP_DIR/v2"/*; do
     if [ -d "$catalog_dir/.git" ]; then
         echo "  Checking out $(basename "$catalog_dir")..."
-        (cd "$catalog_dir" && git config --local core.bare false && git checkout -- . 2>/dev/null || true)
+        (cd "$catalog_dir" && git config --local core.bare false && git reset --hard HEAD >/dev/null)
     fi
 done
 
