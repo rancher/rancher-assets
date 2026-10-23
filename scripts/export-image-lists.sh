@@ -75,12 +75,20 @@ docker rm "$CONTAINER_ID" >/dev/null
 
 # Extracted catalogs are bare git repos - checkout working tree
 echo "Checking out repo contents..."
-for catalog_dir in "$TEMP_DIR/v2"/*; do
+checked_out=0
+# Repos live at v2/<catalog>/<hash>/ (the hash dir holds the .git)
+for catalog_dir in "$TEMP_DIR/v2"/*/*; do
     if [ -d "$catalog_dir/.git" ]; then
-        echo "  Checking out $(basename "$catalog_dir")..."
+        echo "  Checking out $(basename "$(dirname "$catalog_dir")")..."
+        checked_out=$((checked_out + 1))
         (cd "$catalog_dir" && git config --local core.bare false && git reset --hard HEAD >/dev/null)
     fi
 done
+
+if [ "$checked_out" -eq 0 ]; then
+    echo "ERROR: no git repos found under $TEMP_DIR/v2" >&2
+    exit 1
+fi
 
 echo "Scanning charts for image references..."
 mkdir -p "$OUTPUT_DIR"
