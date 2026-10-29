@@ -13,7 +13,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git init /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721 && \
     cd /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721 && \
     git remote add origin https://git.rancher.io/charts && \
-    git fetch --depth 1 origin dd0de8f5e43e2b25f24edb668beac976995332ca && \
+    git fetch --depth 1 origin d80496abc3469d4e343b4a263e706cd0cb585f24 && \
     git update-ref --no-deref HEAD FETCH_HEAD
 
 # Clone partner-charts repository (PROD)
@@ -23,7 +23,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git init /var/lib/rancher-data/local-catalogs/v2/rancher-partner-charts/8f17acdce9bffd6e05a58a3798840e408c4ea71783381ecd2e9af30baad65974 && \
     cd /var/lib/rancher-data/local-catalogs/v2/rancher-partner-charts/8f17acdce9bffd6e05a58a3798840e408c4ea71783381ecd2e9af30baad65974 && \
     git remote add origin https://git.rancher.io/partner-charts && \
-    git fetch --depth 1 origin 93833a56b1973b158a32ba67155770bd4ab083f6 && \
+    git fetch --depth 1 origin 3fc072a3d7e4def4aff6df808551ff077a6f03df && \
     git update-ref --no-deref HEAD FETCH_HEAD
 
 # Clone rke2-charts repository (PROD)
@@ -33,7 +33,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git init /var/lib/rancher-data/local-catalogs/v2/rancher-rke2-charts/675f1b63a0a83905972dcab2794479ed599a6f41b86cd6193d69472d0fa889c9 && \
     cd /var/lib/rancher-data/local-catalogs/v2/rancher-rke2-charts/675f1b63a0a83905972dcab2794479ed599a6f41b86cd6193d69472d0fa889c9 && \
     git remote add origin https://git.rancher.io/rke2-charts && \
-    git fetch --depth 1 origin 57a778fa346403e8625e3331ac246f2c53837ae2 && \
+    git fetch --depth 1 origin 484dd3209246310d16a50831d67ec53a400211d7 && \
     git update-ref --no-deref HEAD FETCH_HEAD
 
 # Consolidated charts image
@@ -52,9 +52,9 @@ RUN chmod +x /usr/local/bin/copy-charts
 ENV CHART_BRANCH=release-v2.16 \
     PARTNER_BRANCH=main \
     RKE2_BRANCH=main \
-    CHART_COMMIT=dd0de8f5e43e2b25f24edb668beac976995332ca \
-    PARTNER_COMMIT=93833a56b1973b158a32ba67155770bd4ab083f6 \
-    RKE2_COMMIT=57a778fa346403e8625e3331ac246f2c53837ae2
+    CHART_COMMIT=d80496abc3469d4e343b4a263e706cd0cb585f24 \
+    PARTNER_COMMIT=3fc072a3d7e4def4aff6df808551ff077a6f03df \
+    RKE2_COMMIT=484dd3209246310d16a50831d67ec53a400211d7
 
 # Runtime labels - provided by build
 ARG VERSION
@@ -77,11 +77,11 @@ LABEL "io.artifacthub.package.logo-url"="https://raw.githubusercontent.com/ranch
     "io.rancher.build-type"=prod \
     "io.rancher.rancher-minor"=2.16 \
     "io.rancher.charts.branch"=release-v2.16 \
-    "io.rancher.charts.commit"=dd0de8f5e43e2b25f24edb668beac976995332ca \
+    "io.rancher.charts.commit"=d80496abc3469d4e343b4a263e706cd0cb585f24 \
     "io.rancher.partner.branch"=main \
-    "io.rancher.partner.commit"=93833a56b1973b158a32ba67155770bd4ab083f6 \
+    "io.rancher.partner.commit"=3fc072a3d7e4def4aff6df808551ff077a6f03df \
     "io.rancher.rke2.branch"=main \
-    "io.rancher.rke2.commit"=57a778fa346403e8625e3331ac246f2c53837ae2
+    "io.rancher.rke2.commit"=484dd3209246310d16a50831d67ec53a400211d7
 
 # Default command: copy charts to shared volume
 CMD ["/usr/local/bin/copy-charts"]
