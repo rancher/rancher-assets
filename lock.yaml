@@ -7,26 +7,26 @@ chart-versions:
                     branch: release-v2.16
                     commit: d80496abc3469d4e343b4a263e706cd0cb585f24
                 partner:
-                    fetched-at: 2026-10-29T11:09:46.649860273Z
+                    fetched-at: 2026-10-30T11:08:52.446325963Z
                     branch: main
-                    commit: 3fc072a3d7e4def4aff6df808551ff077a6f03df
+                    commit: 54095dd4340b736ad26b3bf4557b48a1cc63cc98
                 rke2:
-                    fetched-at: 2026-10-29T11:09:47.029672588Z
+                    fetched-at: 2026-10-30T11:08:52.693544787Z
                     branch: main
-                    commit: 484dd3209246310d16a50831d67ec53a400211d7
+                    commit: 5f6b159ee2e9a6478d34a29a22df343370807921
             dev:
                 charts:
                     fetched-at: 2026-10-29T11:09:47.439039562Z
                     branch: dev-v2.16
                     commit: f76436041ae50212a68f98d6c19f19c54e0f1920
                 partner:
-                    fetched-at: 2026-10-29T11:09:47.841882883Z
+                    fetched-at: 2026-10-30T11:08:53.208474803Z
                     branch: main
-                    commit: 3fc072a3d7e4def4aff6df808551ff077a6f03df
+                    commit: 54095dd4340b736ad26b3bf4557b48a1cc63cc98
                 rke2:
-                    fetched-at: 2026-10-29T11:09:48.231648683Z
+                    fetched-at: 2026-10-30T11:08:53.457698121Z
                     branch: main
-                    commit: 484dd3209246310d16a50831d67ec53a400211d7
+                    commit: 5f6b159ee2e9a6478d34a29a22df343370807921
 base-image:
     bci-base: 16.0@sha256:ecda7b3f321d048b78f4c595961343f29683832998b90aa69bf5ac263d083943
     bci-micro: 16.0@sha256:a83dd744de9ec76debfd163f16eee7ffc91963baaf0135d7f53f2e42244976aa
@@ -34,5 +34,5 @@ copy-script-hash: 37114795bbe1faac92fcc3219079a402f3a665e0494d27b6f6c40cc0527da0
 template-hashes:
     prod-template: 0f5da962310a3e6e1c9cd5049c220a87a128f55d9e837da1a9b564455c9f7a94
     dev-template: 2067882403229f4caf4309ff3f8976277a117dd7de649c43b16015256c8d9e36
-generated-at: 2026-10-29T11:09:48.231671295Z
+generated-at: 2026-10-30T11:08:53.457714626Z
 generator-version: v0.1.0
