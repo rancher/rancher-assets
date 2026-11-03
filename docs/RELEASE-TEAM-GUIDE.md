@@ -65,7 +65,7 @@ A prod release for any other reason is a manual tag push (see [Manual Releases](
 **Trigger:** Any `v*` tag
 
 **What it does:**
-- Builds the tagged Dockerfile and pushes images to Docker Hub and the Prime staging registry
+- Builds the tagged Dockerfile and pushes images to Docker Hub and the Prime staging registry (prod tags also to the Prime registry)
 - Publishes a GitHub release (dev tags as prerelease)
 
 ### 4. Push to rancher/rancher (automatic)
@@ -212,22 +212,18 @@ git log -1 --format='%ai' v2.15-20260724T1530Z
 
 Both build types open a bump PR in rancher/rancher.
 
-## Required Secrets
+## Credentials
 
-### `GITHUB_TOKEN` (automatic)
-- Provided by GitHub Actions
-- Used for most operations
+No personal access tokens are used. Workflows read credentials from Vault (`rancher-eio/read-vault-secrets`, GitHub OIDC) under `secret/data/github/repo/rancher/rancher-assets/`:
 
-### `RANCHER_REPO_TOKEN` (optional)
-- PAT with access to `rancher/rancher` repository
-- Required only if you want automated PRs on prod releases
-- Scope: `repo` or `public_repo`
-- If not set, prod releases succeed but skip PR creation
+| Vault path | Used by | Purpose |
+|------------|---------|---------|
+| `github/pr-actions-write-app/credentials` | `pr-builder-cron.yml`, `auto-release.yml`, `push-to-rancher.yml` | GitHub App token: open PRs, push tags, open rancher/rancher PRs |
+| `dockerhub/rancher/credentials` | `release.yml` | Push images to Docker Hub |
+| `rancher-prime-stg-registry/credentials` | `release.yml` | Push images to Prime staging |
+| `rancher-prime-registry/credentials` | `release.yml` (prod only) | Push images to Prime |
 
-**To configure:**
-1. GitHub Settings → Developer settings → Personal access tokens
-2. Generate token with `repo` scope
-3. Repository Settings → Secrets → New secret → `RANCHER_REPO_TOKEN`
+`auto-merge-bump-pr.yml` uses repository secrets `AUTO_APPROVE_APP_ID` and `AUTO_APPROVE_PRIVATE_KEY` (approves and merges bump PRs).
 
 ## Monitoring
 
