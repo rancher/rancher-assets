@@ -51,6 +51,7 @@ Quick reference for managing rancher-assets releases.
 - Creates one CalVer tag per changed minor:
   - **prod** when rancher-charts' prod commit moved for that minor in `lock.yaml`
   - **dev** for anything else (partner/rke2 chart moves, base image or script changes)
+  - Never both: if prod and dev charts both moved, only prod is tagged; push the dev tag manually if needed
 - Pushes all tags atomically → triggers parallel builds
 
 **Example:**
