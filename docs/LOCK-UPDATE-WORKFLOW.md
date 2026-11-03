@@ -65,7 +65,7 @@ git add lock.yaml dockerfiles/
 git commit -m "Update lock.yaml with latest upstream commits"
 
 # 4. Create PR to main
-# 5. After merge, manually trigger release or wait for auto-prerelease (when implemented)
+# 5. After merge, auto-release.yml tags and releases automatically
 ```
 
 ### Method 2: Auto-Release Workflow (IMPLEMENTED)
