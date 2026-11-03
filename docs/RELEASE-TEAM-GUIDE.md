@@ -128,7 +128,7 @@ Any scheduled step can be triggered manually from the Actions tab (`workflow_dis
 ```
 1. pr-builder-cron runs `make update` (Mon/Wed 11:00 UTC)
    → Opens "Bump chart references" PR if upstream moved
-2. PR smoke test passes → PR auto-merged
+2. Lint, Test & Verify and smoke test pass → PR auto-merged
 3. Auto-release tags each changed minor (prod or dev)
    → Builds, GitHub releases, rancher/rancher bump PRs
 ```
