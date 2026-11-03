@@ -227,15 +227,25 @@ No personal access tokens are used. Workflows read credentials from Vault (`ranc
 
 ## Monitoring
 
+### Check Scheduled Bump
+- **Where**: Actions → PR Builder Cron
+- **When**: Mon/Wed 11:00 UTC, or after dispatch
+- **Shows**: Whether upstream moved and the bump PR opened
+
 ### Check Auto-Release
 - **Where**: Actions → Auto Release
-- **When**: After merge to main with Dockerfile changes
-- **Shows**: Which Dockerfiles changed, tags created
+- **When**: After merge to main with `dockerfiles/**` or `lock.yaml` changes
+- **Shows**: Release targets (minor + prod/dev), tags created
 
 ### Check Builds
 - **Where**: Actions → Build and Release
 - **When**: After tag creation
 - **Shows**: Build status, image push, release publication
+
+### Check rancher/rancher PRs
+- **Where**: Actions → Push to rancher/rancher
+- **When**: After a GitHub release is published
+- **Shows**: Target branch, bump PR link, auto-merge request
 
 ### Check PR Smoke Tests
 - **Where**: PR checks
