@@ -60,44 +60,28 @@ A merge where rancher-charts `release-v2.14` moved, and only partner-charts move
 
 A prod release for any other reason is a manual tag push (see [Manual Releases](#manual-releases)).
 
-### 3. Manual Release (manual)
+## Manual Releases
 
-**Trigger:** GitHub Actions UI → Manual Release workflow
+`release.yml` builds any `v*` tag, so a manual release is a CalVer tag pushed by hand with `scripts/create-tags-local.sh`:
+
+```bash
+# Auto-detect targets from origin/main..HEAD (same rules as auto-release)
+./scripts/create-tags-local.sh --push
+
+# Specific Dockerfile (prod or dev is chosen by the file)
+./scripts/create-tags-local.sh dockerfiles/Dockerfile.2.15 --push
+
+# Specific commit
+./scripts/create-tags-local.sh --commit abc123 dockerfiles/Dockerfile.2.14 --push
+```
+
+Omit `--push` to review the tags locally first.
 
 **When to use:**
 - Rebuild without Dockerfile changes (new timestamp)
-- Release specific minor(s) only
-- Release from older commit
+- Prod release that auto-release classified as dev
+- Release from an older commit
 - Emergency releases
-- Testing
-
-**Inputs:**
-- `rancher_minor` - Specific version (e.g., "2.15") or empty for ALL
-- `build_type` - "dev" or "prod"
-- `commit_sha` - Specific commit or empty for HEAD
-
-**Examples:**
-
-Release Rancher 2.15 prod:
-```
-rancher_minor: 2.15
-build_type: prod
-commit_sha: [empty]
-```
-
-Release ALL minors as dev:
-```
-rancher_minor: [empty]
-build_type: dev
-commit_sha: [empty]
-```
-
-Release from specific commit:
-```
-rancher_minor: 2.14
-build_type: prod
-commit_sha: abc123def456
-```
 
 ## Release Cadence
 
