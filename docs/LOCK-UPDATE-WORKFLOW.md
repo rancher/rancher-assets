@@ -35,10 +35,7 @@ This project uses **CalVer (Calendar Versioning)** with Rancher-minor aligned pr
 - **Auto-release workflow** (`.github/workflows/auto-release.yml`) - creates tags for changed Dockerfiles
 - **PR smoke testing** (`.github/workflows/pr-smoke-test.yml`) - verifies Dockerfiles can build before merge
 - **Dockerfile-centric change detection** via shell scripts in `.github/scripts`
-
-### ⚠️ Not Yet Implemented
-
-- **Automated upstream polling** - no scheduled job to query upstream repos and create PRs
+- **Scheduled upstream polling** (`.github/workflows/pr-builder-cron.yml`) - runs `make update` every Monday and Wednesday at 11:00 UTC and opens an auto-merged PR when `lock.yaml` or `dockerfiles/` change
 
 ## How lock.yaml Gets Updated
 
