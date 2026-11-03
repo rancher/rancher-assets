@@ -103,6 +103,27 @@ build_type: prod
 commit_sha: abc123def456
 ```
 
+## Release Cadence
+
+Releases are fully automated. Every Monday and Wednesday at 11:00 UTC, new upstream chart commits flow end to end into rancher/rancher with no human intervention:
+
+| Step | Workflow | Trigger |
+|------|----------|---------|
+| 1. Bump chart references, open PR | `pr-builder-cron.yml` | Cron `0 11 * * 1,3` |
+| 2. Approve and merge bump PR | `auto-merge-bump-pr.yml` | PR labeled `status/auto-created` |
+| 3. Tag changed minors | `auto-release.yml` | Push to `main` (`dockerfiles/**`, `lock.yaml`) |
+| 4. Build and publish images | `release.yml` | `v*` tag |
+| 5. Open bump PR in rancher/rancher | `push-to-rancher.yml` | Release published |
+| 6. Approve, re-run flaky checks, auto-merge | rancher/rancher `auto-approve-rancher-assets.yml` | Cron `0 0,8,16 * * 1-5` |
+
+### Forcing a run
+
+Any scheduled step can be triggered manually from the Actions tab (`workflow_dispatch`):
+
+- **`pr-builder-cron.yml`** - pick up upstream changes now instead of waiting for the next Monday/Wednesday. Input: `target_branch` (default `main`).
+- **`push-to-rancher.yml`** - re-push an existing release to rancher/rancher. Inputs: `git_ref` (tag, SHA or branch), `rancher_minor` (e.g. `2.16`).
+- **rancher/rancher `auto-approve-rancher-assets.yml`** - approve pending bump PRs and re-run failed checks now.
+
 ## Common Workflows
 
 ### Normal Update Flow
