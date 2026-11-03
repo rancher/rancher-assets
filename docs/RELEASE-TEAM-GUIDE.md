@@ -122,67 +122,41 @@ Any scheduled step can be triggered manually from the Actions tab (`workflow_dis
 
 ## Common Workflows
 
-### Normal Update Flow
+### Scheduled Update (no action needed)
 
 ```
-1. Run `make generate` locally
-   → Updates lock.yaml and all Dockerfiles
-
-2. Create PR with changes
-   → PR smoke test validates all builds
-
-3. PR approved and merged
-   → Auto-release creates 4 tags (2.14 prod/dev, 2.15 prod/dev)
-   → 4 parallel builds
-   → 4 GitHub releases
-   → Prod releases create rancher/rancher PRs
+1. pr-builder-cron runs `make update` (Mon/Wed 11:00 UTC)
+   → Opens "Bump chart references" PR if upstream moved
+2. PR smoke test passes → PR auto-merged
+3. Auto-release tags each changed minor (prod or dev)
+   → Builds, GitHub releases, rancher/rancher bump PRs
 ```
 
-### Manual Engineering Change
+### Engineering Change
 
 ```
-1. Engineer fixes bug in Dockerfile.2.14 only
-   → Creates PR changing one file
-
-2. PR smoke test validates
-   → Builds Dockerfile.2.14 only
-
-3. PR merged
-   → Auto-release creates v2.14-{timestamp}
-   → Single build and release
+1. Change internal/generator/tmpl/*.tmpl or config.yaml, run `make generate`
+   (Dockerfiles are generated - never edit them by hand)
+2. Open PR → smoke test builds affected Dockerfiles
+3. Merge → auto-release tags affected minors as dev
+4. Need prod? Push a prod tag (see Manual Releases)
 ```
 
 ### Emergency Rebuild (No Dockerfile Changes)
 
 ```
-1. Need new release but Dockerfiles haven't changed
-   → Use manual release workflow
-
-2. GitHub UI → Actions → Manual Release
-   rancher_minor: 2.15
-   build_type: prod
-   commit_sha: [empty for HEAD]
-
-3. Creates v2.15-{new-timestamp}
-   → Builds and releases
+./scripts/create-tags-local.sh dockerfiles/Dockerfile.2.15 --push
+→ New v2.15-{timestamp} tag → build, release, rancher/rancher PR
 ```
 
-### Security Fix All Versions
+### Security Fix (BCI Base Image CVE)
 
 ```
-1. CVE in BCI base image
-   → Update BCI version in config
-   → Run `make generate`
-   → All Dockerfiles update
-
-2. Create PR
-   → PR smoke test builds all 4 Dockerfiles
-
-3. Merge PR
-   → Auto-release creates 4 tags
-   → All versions rebuild with fixed base image
-
-4. All 4 releases ready for consumption
+1. Update `base-image` in config.yaml, run `make generate`
+2. Open PR → smoke test builds all Dockerfiles
+3. Merge → auto-release tags all minors as dev
+4. Push prod tags for each affected minor:
+   ./scripts/create-tags-local.sh dockerfiles/Dockerfile.2.14 dockerfiles/Dockerfile.2.15 --push
 ```
 
 ## Query Versions
