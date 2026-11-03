@@ -411,8 +411,8 @@ These labels provide full supply chain traceability for every image.
 - Git tags: CalVer timestamps, point to commits, trigger builds
 
 **Releases:**
-- **Auto prereleases**: On merge to main (for changed Rancher minors, with -dev suffix)
-- **Manual releases**: Release Team workflow_dispatch (full control over timing)
+- **Auto-releases**: On merge to main (per changed Rancher minor; prod if rancher-charts' prod commit moved, dev otherwise)
+- **Manual releases**: CalVer tag pushed with `scripts/create-tags-local.sh`
 - **Build on tag**: Automatic build + publish when tag created
 
 **Benefits:**
