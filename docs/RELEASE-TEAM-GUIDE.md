@@ -221,7 +221,7 @@ No personal access tokens are used. Workflows read credentials from Vault (`ranc
 
 | Vault path | Used by | Purpose |
 |------------|---------|---------|
-| `github/pr-actions-write-app/credentials` | `pr-builder-cron.yml`, `auto-release.yml`, `push-to-rancher.yml` | GitHub App token: open PRs, push tags, open rancher/rancher PRs |
+| `github/pr-actions-write-app/credentials` | `pr-builder-cron.yml`, `auto-release.yml`, `release.yml`, `push-to-rancher.yml` | GitHub App token: open PRs, push tags, publish releases (triggers push-to-rancher), open rancher/rancher PRs |
 | `dockerhub/rancher/credentials` | `release.yml` | Push images to Docker Hub |
 | `rancher-prime-stg-registry/credentials` | `release.yml` | Push images to Prime staging |
 | `rancher-prime-registry/credentials` | `release.yml` (prod only) | Push images to Prime |
