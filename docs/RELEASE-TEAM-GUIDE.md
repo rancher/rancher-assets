@@ -263,15 +263,14 @@ git tag -l "v2.*" --sort=-version:refname | head -20
 
 ## Troubleshooting
 
-### "No Dockerfiles changed" in auto-release
-- Auto-release only triggers on `dockerfiles/**` changes
-- If you changed lock.yaml but Dockerfiles didn't update, run `make generate`
-- Use manual release if needed
+### "No release targets" in auto-release
+- Auto-release only triggers on `dockerfiles/**` or `lock.yaml` changes
+- A change that doesn't alter a rendered Dockerfile (or `copy-script-hash`) releases nothing
+- Push a tag manually if a release is still needed (see [Manual Releases](#manual-releases))
 
 ### "Tag already exists"
-- Each CalVer timestamp is unique per build type
-- If you need another release, wait 1 minute (timestamp will change)
-- Or use manual release from a different commit
+- Tags are unique per minor, build type and minute
+- Wait a minute and retry, or tag a different commit with `create-tags-local.sh --commit`
 
 ### Build fails
 - Check `release.yml` workflow logs
@@ -280,14 +279,18 @@ git tag -l "v2.*" --sort=-version:refname | head -20
 - Ensure base images are accessible
 
 ### PR to rancher/rancher not created
-- Only happens for prod builds (not dev)
-- Check `RANCHER_REPO_TOKEN` secret is configured
-- Verify `rancher-branch` in `config.yaml` is correct
+- Happens for every release, prod and dev
+- Check the Push to rancher/rancher run logs
+- The tag's minor must have a target branch in `VERSION_BRANCH_MAP` (`.github/workflows/push-to-rancher/common.sh`)
+
+### rancher/rancher bump PR not merging
+- rancher/rancher `auto-approve-rancher-assets.yml` approves it and re-runs failed checks, up to 5 attempts
+- After 5 failed attempts it needs a human
 
 ### PR smoke test fails
 - Check which Dockerfile failed in PR checks
 - Review build logs
-- Fix Dockerfile and push to PR
+- Fix the template or `config.yaml`, run `make generate`, push to the PR
 - Smoke test re-runs automatically
 
 ## Tips
