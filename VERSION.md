@@ -291,38 +291,38 @@ git commit -m "Bump BCI to fix CVE"
 # 2. Create PR, merge to main
 # (PR reviewed, CI validates)
 
-# 3. Auto-prerelease workflow triggers at 14:30 UTC
-# - Detects changed dockerfiles
-# - Generates CalVer timestamps
-# - Creates tags with -dev suffix
+# 3. Auto-release workflow triggers on merge
+# - Detects changed minors
+# - Tags with the merge commit's timestamp
+# - Base image change → -dev tags
 # - Builds images
 
 # 4. Images available for testing
-# ghcr.io/rancher/rancher-assets:v2.14-20260716T1430Z-dev
-# ghcr.io/rancher/rancher-assets:v2.15-20260716T1430Z-dev
+# rancher/rancher-assets:v2.14-20260716T1430Z-dev
+# rancher/rancher-assets:v2.15-20260716T1430Z-dev
 ```
 
 ### Stable Release Flow
+
+Automatic when rancher-charts' prod commit moved (auto-release tags prod). Otherwise, promote a validated dev build:
 
 ```bash
 # 1. Release Team validates prerelease
 # Test v2.15-20260716T1430Z-dev in staging
 
-# 2. Release Team triggers manual workflow
-# Via GitHub UI:
-#   rancher_minor: 2.15
-#   release_type: stable
+# 2. Release Team pushes a prod tag on the same commit
+./scripts/create-tags-local.sh --commit abc123 dockerfiles/Dockerfile.2.15 --push
 
-# 3. Workflow creates stable tag at 16:00 UTC
-# v2.15-20260805T1600Z created on tested commit
+# 3. Stable tag uses the commit's timestamp
+# v2.15-20260716T1430Z
 
 # 4. Build workflow runs
 # - Builds with prod refs
 # - Pushes images
-# - Creates PR to rancher/rancher
+# - Publishes release → push-to-rancher opens PR to rancher/rancher
 
 # 5. Rancher PR merged
-# rancher/rancher picks up v2.15-20260805T1600Z
+# rancher/rancher picks up v2.15-20260716T1430Z
 ```
 
 ### Querying Release History
