@@ -196,19 +196,21 @@ git log -1 --format='%ai' v2.15-20260724T1530Z
 
 ## Build Type Differences
 
-### Prod (`build_type: prod`)
+### Prod
 - Uses `Dockerfile.{MINOR}` (no -dev suffix)
-- Uses upstream `release-v{MINOR}` branches
+- rancher-charts `release-v{MINOR}`
 - Tag format: `v{MINOR}-{timestamp}` (no -dev)
-- Creates PR to rancher/rancher
+- Auto-released only when rancher-charts' prod commit moved; otherwise push the tag manually
 - For production Rancher releases
 
-### Dev (`build_type: dev`)
+### Dev
 - Uses `Dockerfile.{MINOR}-dev`
-- Uses upstream `dev-v{MINOR}` branches
+- rancher-charts `dev-v{MINOR}`
 - Tag format: `v{MINOR}-{timestamp}-dev`
-- No rancher/rancher PR
+- Published as a GitHub prerelease
 - For testing and development
+
+Both build types open a bump PR in rancher/rancher.
 
 ## Required Secrets
 
