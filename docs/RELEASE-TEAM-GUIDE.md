@@ -91,7 +91,7 @@ A prod release for any other reason is a manual tag push (see [Manual Releases](
 ./scripts/create-tags-local.sh --commit abc123 dockerfiles/Dockerfile.2.14 --push
 ```
 
-Omit `--push` to review the tags locally first.
+Omit `--push` to review the tags locally first. The script tags local `HEAD` (or `--commit`), so run it on an up-to-date `main`.
 
 **When to use:**
 - Rebuild without Dockerfile changes (needs a new commit, see ["Tag already exists"](#tag-already-exists))
@@ -147,7 +147,8 @@ Any scheduled step can be triggered manually from the Actions tab (`workflow_dis
 ```
 1. Merge an empty commit to main (tags come from the commit timestamp)
    git commit --allow-empty -m "Rebuild 2.15"
-2. ./scripts/create-tags-local.sh dockerfiles/Dockerfile.2.15 --push
+2. After it merges: git checkout main && git pull
+3. ./scripts/create-tags-local.sh dockerfiles/Dockerfile.2.15 --push
    → New v2.15-{timestamp} tag → build, release, rancher/rancher PR
 ```
 
@@ -191,8 +192,8 @@ git log -1 --format='%ai' v2.15-20260724T1530Z
 |-----------|--------|
 | Upstream charts moved | Nothing - scheduled run handles it |
 | Need upstream changes before next Mon/Wed | Dispatch `pr-builder-cron.yml` |
-| Need 2.15 prod without changes | Merge an empty commit, then `./scripts/create-tags-local.sh dockerfiles/Dockerfile.2.15 --push` |
-| Need 2.14 dev rebuild | Merge an empty commit, then `./scripts/create-tags-local.sh dockerfiles/Dockerfile.2.14-dev --push` |
+| Need 2.15 prod without changes | Merge an empty commit, pull `main`, then `./scripts/create-tags-local.sh dockerfiles/Dockerfile.2.15 --push` |
+| Need 2.14 dev rebuild | Merge an empty commit, pull `main`, then `./scripts/create-tags-local.sh dockerfiles/Dockerfile.2.14-dev --push` |
 | Release 2.14 prod from commit abc123 | `./scripts/create-tags-local.sh --commit abc123 dockerfiles/Dockerfile.2.14 --push` |
 | Re-push a release to rancher/rancher | Dispatch `push-to-rancher.yml` |
 
@@ -303,7 +304,7 @@ git tag -l "v2.*" --sort=-version:refname | head -20
 
 **Selective release**: Pass only the Dockerfiles you want to `create-tags-local.sh`
 
-**Rebuild everything**: Merge an empty commit, then pass every Dockerfile in `dockerfiles/` to `create-tags-local.sh`
+**Rebuild everything**: Merge an empty commit, pull `main`, then pass every Dockerfile in `dockerfiles/` to `create-tags-local.sh`
 
 **Testing**: Create dev releases first, validate, then create prod releases
 
