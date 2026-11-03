@@ -4,10 +4,11 @@ Quick reference for managing rancher-assets releases.
 
 ## TL;DR
 
-- **Auto-releases** happen when Dockerfiles merge to main (creates tags for changed files)
-- **Manual releases** give you full control via GitHub Actions UI
+- **Scheduled releases** run every Monday and Wednesday at 11:00 UTC, fully automated from upstream charts to rancher/rancher
+- **Auto-releases** tag every Rancher minor whose inputs changed on merge to main (prod only when rancher-charts' prod commit moved, dev otherwise)
+- **Manual releases** are a CalVer tag pushed by hand, or a `workflow_dispatch` of a scheduled step
 - **PR smoke tests** validate builds before merge
-- **Git tags** trigger builds automatically
+- **Git tags** (`v*`) trigger builds automatically
 - **CalVer** versions with minute-level timestamp granularity
 
 ## Version Format
