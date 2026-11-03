@@ -25,8 +25,9 @@ Quick reference for managing rancher-assets releases.
 - Rancher version is explicit in tag
 - Timestamp auto-generates (no version bumping)
 - Multiple releases per day supported
-- `-dev` suffix indicates dev build (uses `dev-v2.X` upstream branches)
-- No suffix indicates prod build (uses `release-v2.X` upstream branches)
+- `-dev` suffix indicates dev build (rancher-charts `dev-v2.X`)
+- No suffix indicates prod build (rancher-charts `release-v2.X`)
+- partner-charts and rke2-charts track `main` for both
 
 ## Workflow Overview
 
