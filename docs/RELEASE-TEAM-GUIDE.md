@@ -33,11 +33,11 @@ Quick reference for managing rancher-assets releases.
 
 ### 1. PR Smoke Test (automatic)
 
-**Trigger:** Pull request touching `dockerfiles/**`
+**Trigger:** Pull request touching `dockerfiles/**`, `lock.yaml`, `config.yaml`, `Makefile` or `hack/make/**`
 
 **What it does:**
 - Detects which Dockerfiles changed
-- Builds each changed Dockerfile (no push)
+- Builds each changed Dockerfile for `linux/amd64` and `linux/arm64` (no push)
 - Reports pass/fail as PR check
 
 **Purpose:** Catch build failures before merge
