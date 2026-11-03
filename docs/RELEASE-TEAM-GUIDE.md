@@ -52,7 +52,7 @@ Quick reference for managing rancher-assets releases.
   - **prod** when rancher-charts' prod commit moved for that minor in `lock.yaml`
   - **dev** for anything else (partner/rke2 chart moves, base image or script changes)
   - Never both: if prod and dev charts both moved, only prod is tagged; push the dev tag manually if needed
-- Pushes all tags atomically → triggers parallel builds
+- Pushes the tags → triggers parallel builds
 
 **Example:**
 A merge where rancher-charts `release-v2.14` moved, and only partner-charts moved for 2.15, creates:
