@@ -183,13 +183,16 @@ git log -1 --format='%ai' v2.15-20260724T1530Z
 
 ## Decision Matrix
 
-| Situation | Action | rancher_minor | build_type |
-|-----------|--------|---------------|------------|
-| Dockerfiles merged to main | Auto (wait) | N/A | N/A |
-| Need 2.15 prod without changes | Manual | `2.15` | `prod` |
-| Need ALL dev rebuilds | Manual | `` (empty) | `dev` |
-| Emergency 2.14 prod | Manual | `2.14` | `prod` |
-| Test build from commit abc123 | Manual | `2.14` | `dev` + commit |
+> Minors and commit SHAs below are illustrative examples only.
+
+| Situation | Action |
+|-----------|--------|
+| Upstream charts moved | Nothing - scheduled run handles it |
+| Need upstream changes before next Mon/Wed | Dispatch `pr-builder-cron.yml` |
+| Need 2.15 prod without changes | `./scripts/create-tags-local.sh dockerfiles/Dockerfile.2.15 --push` |
+| Need 2.14 dev rebuild | `./scripts/create-tags-local.sh dockerfiles/Dockerfile.2.14-dev --push` |
+| Release 2.14 prod from commit abc123 | `./scripts/create-tags-local.sh --commit abc123 dockerfiles/Dockerfile.2.14 --push` |
+| Re-push a release to rancher/rancher | Dispatch `push-to-rancher.yml` |
 
 ## Build Type Differences
 
