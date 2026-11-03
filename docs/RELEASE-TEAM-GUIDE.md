@@ -118,7 +118,7 @@ Releases are fully automated. Every Monday and Wednesday at 11:00 UTC, new upstr
 Any scheduled step can be triggered manually from the Actions tab (`workflow_dispatch`):
 
 - **`pr-builder-cron.yml`** - pick up upstream changes now instead of waiting for the next Monday/Wednesday. Input: `target_branch` (default `main`).
-- **`push-to-rancher.yml`** - re-push an existing release to rancher/rancher. Inputs: `git_ref` (tag, SHA or branch), `rancher_minor` (e.g. `2.16`).
+- **`push-to-rancher.yml`** - re-push an existing release to rancher/rancher. Inputs: `git_ref` (tag, SHA or branch), `rancher_minor` (e.g. `2.16`). If the ref has both a prod and a dev tag, the prod one is used.
 - **rancher/rancher `auto-approve-rancher-assets.yml`** - approve pending bump PRs and re-run failed checks now.
 
 ## Common Workflows
