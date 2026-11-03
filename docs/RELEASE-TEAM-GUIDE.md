@@ -44,27 +44,21 @@ Quick reference for managing rancher-assets releases.
 
 ### 2. Auto-Release (automatic)
 
-**Trigger:** Merge to `main` with `dockerfiles/**` changes
+**Trigger:** Merge to `main` with `dockerfiles/**` or `lock.yaml` changes
 
 **What it does:**
-- Detects which Dockerfiles changed
-- Creates individual CalVer tag for EACH changed Dockerfile
-- Pushes all tags → triggers parallel builds
+- Detects which Rancher minors have changed inputs
+- Creates one CalVer tag per changed minor:
+  - **prod** when rancher-charts' prod commit moved for that minor in `lock.yaml`
+  - **dev** for anything else (partner/rke2 chart moves, base image or script changes)
+- Pushes all tags atomically → triggers parallel builds
 
 **Example:**
-If you merge a PR that changes:
-- `Dockerfile.2.14` (prod)
-- `Dockerfile.2.14-dev` (dev)
-- `Dockerfile.2.15` (prod)
-- `Dockerfile.2.15-dev` (dev)
+A merge where rancher-charts `release-v2.14` moved, and only partner-charts moved for 2.15, creates:
+- `v2.14-20260724T1530Z` (prod)
+- `v2.15-20260724T1530Z-dev` (dev)
 
-Auto-release creates 4 tags:
-- `v2.14-20260724T1530Z`
-- `v2.14-20260724T1530Z-dev`
-- `v2.15-20260724T1530Z`
-- `v2.15-20260724T1530Z-dev`
-
-All 4 build in parallel → 4 GitHub releases
+A prod release for any other reason is a manual tag push (see [Manual Releases](#manual-releases)).
 
 ### 3. Manual Release (manual)
 
