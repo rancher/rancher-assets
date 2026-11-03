@@ -257,26 +257,26 @@ Result:
 **What it does:**
 1. Parses tag to determine version and build type
 2. Builds multi-arch images (amd64, arm64)
-3. Pushes to Docker Hub
-4. Creates GitHub Release with metadata
-5. Creates PR to `rancher/rancher` (stable only)
+3. Pushes to Docker Hub and Prime staging (prod also to Prime)
+4. Publishes the GitHub Release (dev as prerelease)
+5. The published release triggers `push-to-rancher.yml`, which opens the bump PR in `rancher/rancher` (prod and dev)
 
 **Tag triggers build immediately:**
 ```
 Tag created: v2.15-20260805T1600Z
   ↓
-build-release.yml triggers
+release.yml triggers
   ↓
 Reads lock.yaml from tagged commit
   ↓
 Builds using prod refs (no -dev suffix = stable)
   ↓
 Pushes multi-arch image:
-  - ghcr.io/rancher/rancher-assets:v2.15-20260805T1600Z (linux/amd64, linux/arm64)
+  - rancher/rancher-assets:v2.15-20260805T1600Z (linux/amd64, linux/arm64)
   ↓
-Creates GitHub Release
+Publishes GitHub Release
   ↓
-Creates PR to rancher/rancher (if stable)
+push-to-rancher.yml opens PR to rancher/rancher
 ```
 
 ## Version Lifecycle
