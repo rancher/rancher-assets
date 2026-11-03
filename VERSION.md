@@ -204,60 +204,44 @@ Build workflow builds both images from abc123
 
 ### 2. Manual Releases (Release Team Control)
 
-**Workflow:** `.github/workflows/manual-release.yml`
-
-**Trigger:** Manual `workflow_dispatch`
-
-**Inputs:**
-- `commit_sha` - Commit to release (default: HEAD of main)
-- `rancher_minor` - Which Rancher minor (e.g., 2.14, 2.15; empty = ALL)
-- `release_type` - `prerelease` (default) or `stable`
+`release.yml` builds any `v*` tag, so a manual release is a CalVer tag pushed with `scripts/create-tags-local.sh`. The prod/dev type comes from the Dockerfile; the timestamp comes from the tagged commit. Run it on an up-to-date `main`.
 
 **Use Cases:**
 
 #### Scenario A: Rancher 2.15.0 GA release
 ```
-Release Team triggers:
-  commit_sha: [empty] (uses HEAD)
-  rancher_minor: 2.15
-  release_type: stable
+git checkout main && git pull
+./scripts/create-tags-local.sh dockerfiles/Dockerfile.2.15 --push
 
 Result:
-  v2.15-20260805T1600Z (stable)
-  Tag created on HEAD of main at 16:00 UTC
+  v2.15-20260805T1600Z (stable), on HEAD of main
 ```
 
 #### Scenario B: OOB release for Rancher 2.14.3
 ```
-Release Team triggers:
-  commit_sha: def456
-  rancher_minor: 2.14
-  release_type: stable
+./scripts/create-tags-local.sh --commit def456 dockerfiles/Dockerfile.2.14 --push
 
 Result:
-  v2.14-20260722T0915Z (stable)
-  Tag created on commit def456 at 09:15 UTC
+  v2.14-20260722T0915Z (stable), on commit def456
 ```
 
 #### Scenario C: BCI security fix affects all Rancher minors
 ```
-Release Team triggers:
-  commit_sha: abc123
-  rancher_minor: [empty] ← ALL
-  release_type: prerelease
+Auto-release already tagged abc123 as dev (base image change).
+Promote it to prod for every minor:
+
+./scripts/create-tags-local.sh --commit abc123 \
+  dockerfiles/Dockerfile.2.14 dockerfiles/Dockerfile.2.15 --push
 
 Result:
-  v2.14-20260716T1430Z-dev
-  v2.15-20260716T1430Z-dev
-  All tags on same commit abc123 at 14:30 UTC
+  v2.14-20260716T1430Z
+  v2.15-20260716T1430Z
+  Same commit and timestamp as the dev tags
 ```
 
 #### Scenario D: RC for upcoming Rancher 2.14.4
 ```
-Release Team triggers:
-  commit_sha: [empty]
-  rancher_minor: 2.14
-  release_type: prerelease
+./scripts/create-tags-local.sh dockerfiles/Dockerfile.2.14-dev --push
 
 Result:
   v2.14-20260819T1130Z-dev
