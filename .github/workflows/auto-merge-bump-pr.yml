@@ -1,6 +1,6 @@
 name: Auto Merge Bump PR
 
-# Auto-approves and merges the daily "Bump chart references" PR opened by
+# Auto-approves and merges the scheduled "Bump chart references" PR opened by
 # pr-builder-cron.yml, once its CI checks pass.
 
 on:
