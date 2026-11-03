@@ -60,6 +60,22 @@ A merge where rancher-charts `release-v2.14` moved, and only partner-charts move
 
 A prod release for any other reason is a manual tag push (see [Manual Releases](#manual-releases)).
 
+### 3. Build and Release (automatic)
+
+**Trigger:** Any `v*` tag
+
+**What it does:**
+- Builds the tagged Dockerfile and pushes images to Docker Hub and the Prime staging registry
+- Publishes a GitHub release (dev tags as prerelease)
+
+### 4. Push to rancher/rancher (automatic)
+
+**Trigger:** GitHub release published (prod and dev)
+
+**What it does:**
+- Opens a PR in rancher/rancher bumping `defaultAssetsImage` in `build.yaml`, on the branch mapped to the tag's minor
+- Requests auto-merge; rancher/rancher's `auto-approve-rancher-assets.yml` approves it
+
 ## Manual Releases
 
 `release.yml` builds any `v*` tag, so a manual release is a CalVer tag pushed by hand with `scripts/create-tags-local.sh`:
