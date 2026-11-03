@@ -297,11 +297,11 @@ git tag -l "v2.*" --sort=-version:refname | head -20
 
 **Multiple releases per day**: Fully supported. CalVer includes hour:minute.
 
-**Both prod and dev at once**: Possible via manual release (run workflow twice with different build_type)
+**Both prod and dev at once**: Push both tags: `./scripts/create-tags-local.sh dockerfiles/Dockerfile.2.15 dockerfiles/Dockerfile.2.15-dev --push`
 
-**Selective release**: Use manual release with specific `rancher_minor`
+**Selective release**: Pass only the Dockerfiles you want to `create-tags-local.sh`
 
-**Rebuild everything**: Manual release with empty `rancher_minor` and chosen `build_type`
+**Rebuild everything**: Pass every Dockerfile in `dockerfiles/` to `create-tags-local.sh`
 
 **Testing**: Create dev releases first, validate, then create prod releases
 
