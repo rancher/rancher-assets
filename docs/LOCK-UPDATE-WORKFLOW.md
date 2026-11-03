@@ -87,15 +87,15 @@ git commit -m "Update lock.yaml with latest upstream commits"
 - Support for manual engineering changes to individual Dockerfiles
 - Multiple releases per day for the same variant (CalVer timestamp granularity)
 
-### Method 3: Scheduled Upstream Polling (NOT IMPLEMENTED)
+### Method 3: Scheduled Upstream Polling (IMPLEMENTED)
 
-**Status:** No scheduled workflow exists to automatically run `make generate` and create PRs.
+**Trigger:** Cron, Monday and Wednesday at 11:00 UTC, or manual `workflow_dispatch` (optional `target_branch`, default `main`)  
+**What it does:**
+1. Runs `make update` to pick up new upstream commits and regenerate `lock.yaml` and `dockerfiles/`
+2. Opens a PR to `main` when those files changed
+3. The PR is auto-approved and auto-merged, which triggers Method 2
 
-**If implemented, it could:**
-- Run on a schedule (e.g., daily or hourly)
-- Query upstream repos for new commits
-- Create automated PR if changes detected
-- Chart teams would see PRs appear when they merge to upstream
+**Status:** ✅ Implemented in `.github/workflows/pr-builder-cron.yml`
 
 ## CI/CD Pipeline Architecture
 
