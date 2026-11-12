@@ -28,8 +28,8 @@ cluster-repos:
     url: https://github.com/rancher/charts
     path: /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721
   partner:
-    url: https://git.rancher.io/partner-charts
+    url: https://github.com/rancher/partner-charts
     path: /var/lib/rancher-data/local-catalogs/v2/rancher-partner-charts/8f17acdce9bffd6e05a58a3798840e408c4ea71783381ecd2e9af30baad65974
   rke2:
-    url: https://git.rancher.io/rke2-charts
+    url: https://github.com/rancher/rke2-charts
     path: /var/lib/rancher-data/local-catalogs/v2/rancher-rke2-charts/675f1b63a0a83905972dcab2794479ed599a6f41b86cd6193d69472d0fa889c9
