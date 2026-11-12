@@ -75,7 +75,7 @@ A prod release for any other reason is a manual tag push (see [Manual Releases](
 
 **What it does:**
 - Opens a PR in rancher/rancher bumping `defaultAssetsImage` in `build.yaml`, on the branch mapped to the tag's minor
-- Requests auto-merge; rancher/rancher's `auto-approve-rancher-assets.yml` approves it
+- rancher/rancher's `auto-approve-rancher-assets.yml` validates the diff, approves it and enables auto-merge
 
 ## Manual Releases
 
@@ -249,7 +249,7 @@ No personal access tokens are used. Workflows read credentials from Vault (`ranc
 ### Check rancher/rancher PRs
 - **Where**: Actions → Push to rancher/rancher
 - **When**: After a GitHub release is published
-- **Shows**: Target branch, bump PR link, auto-merge request
+- **Shows**: Target branch, bump PR link
 
 ### Check PR Smoke Tests
 - **Where**: PR checks
