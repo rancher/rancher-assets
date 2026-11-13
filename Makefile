@@ -10,7 +10,7 @@ CI ?= false
 
 # Docker run wrapper (only used locally)
 DOCKER_RUN = docker run --rm -i \
-	-v $(PWD):$(WORKDIR) \
+	-v $(PWD):$(WORKDIR):z \
 	-w $(WORKDIR) \
 	$(CI_IMAGE)
 
