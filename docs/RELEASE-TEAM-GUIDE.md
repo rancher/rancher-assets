@@ -74,7 +74,7 @@ A prod release for any other reason is a manual tag push (see [Manual Releases](
 **Trigger:** GitHub release published (prod and dev)
 
 **What it does:**
-- Opens a PR in rancher/rancher bumping `defaultAssetsImage` in `build.yaml`, on the branch mapped to the tag's minor
+- Opens a PR in rancher/rancher bumping `defaultAssetsImage` in `build.yaml`, on every branch mapped to the tag's minor
 - rancher/rancher's `auto-approve-rancher-assets.yml` validates the diff, approves it and enables auto-merge
 
 ## Manual Releases
@@ -285,7 +285,7 @@ git tag -l "v2.*" --sort=-version:refname | head -20
 ### PR to rancher/rancher not created
 - Happens for every release, prod and dev
 - Check the Push to rancher/rancher run logs
-- The tag's minor must have a target branch in `VERSION_BRANCH_MAP` (`.github/workflows/push-to-rancher/common.sh`)
+- The tag's minor must have target branches in `VERSION_BRANCH_MAP` (`.github/workflows/push-to-rancher/common.sh`); a minor can map to several, comma-separated
 
 ### rancher/rancher bump PR not merging
 - rancher/rancher `auto-approve-rancher-assets.yml` approves it and re-runs failed checks, up to 5 attempts

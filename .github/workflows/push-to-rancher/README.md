@@ -41,8 +41,7 @@ Target branches are explicitly mapped to tag versions in `common.sh`:
 
 ```bash
 declare -A VERSION_BRANCH_MAP=(
-  ["2.16"]="main"
-  ["2.15"]="release/v2.15"
+  ["2.16"]="main,release/v2.16"
 )
 ```
 
@@ -58,8 +57,7 @@ declare -A VERSION_BRANCH_MAP=(
   - Example: `["2.16"]="main,release/v2.16"`
 
 **How it works:**
-- Tag `v2.16-20260901T1200Z` → looks up `2.16` → updates branches: `main`
-- Tag `v2.15-20260901T1200Z` → looks up `2.15` → updates branches: `release/v2.15`
+- Tag `v2.16-20260901T1200Z` → looks up `2.16` → updates branches: `main` and `release/v2.16`
 - If version not in map → workflow fails with clear error message
 
 ### Filtering branches at runtime

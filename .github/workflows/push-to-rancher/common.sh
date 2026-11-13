@@ -29,7 +29,7 @@ DRY_RUN="${DRY_RUN:-false}"
 #   After release/v2.17 is cut: "2.18:main" and "2.17:release/v2.17,2.16:release/v2.16"
 #
 declare -A VERSION_BRANCH_MAP=(
-  ["2.16"]="main"
+  ["2.16"]="main,release/v2.16"
 )
 
 # Extract minor version from TAG (e.g., v2.16-20260901T1200Z -> 2.16)
