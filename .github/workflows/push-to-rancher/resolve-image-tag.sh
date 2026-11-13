@@ -45,7 +45,7 @@ if [ -z "$MATCHING_TAGS" ]; then
 fi
 
 # Prefer non-dev tags, otherwise take the first match
-TAG=$(echo "$MATCHING_TAGS" | grep -v -- '-dev$' | head -1)
+TAG=$(echo "$MATCHING_TAGS" | grep -v -- '-dev$' | head -1 || true)
 if [ -z "$TAG" ]; then
   TAG=$(echo "$MATCHING_TAGS" | head -1)
 fi
