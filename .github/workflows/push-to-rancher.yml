@@ -66,7 +66,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.git_ref }}
+          # Scripts come from the dispatched branch, not git_ref, so fixes apply to old tags too.
           fetch-depth: 0  # Need tags for tag resolution
           persist-credentials: false
 
