@@ -32,7 +32,7 @@ base-image:
     bci-micro: 16.0@sha256:a83dd744de9ec76debfd163f16eee7ffc91963baaf0135d7f53f2e42244976aa
 copy-script-hash: 37114795bbe1faac92fcc3219079a402f3a665e0494d27b6f6c40cc0527da0a6
 template-hashes:
-    prod-template: 0f5da962310a3e6e1c9cd5049c220a87a128f55d9e837da1a9b564455c9f7a94
-    dev-template: 2067882403229f4caf4309ff3f8976277a117dd7de649c43b16015256c8d9e36
-generated-at: 2026-11-20T15:04:46.124702388Z
+    prod-template: 9e89c4428246e789a7a15cee03edea4d167676f17d05a978092479e590e2b43b
+    dev-template: b10db01b4a40e2ce569fdf7a4d771f389458a7e9995f8c89a586dca29e40f48a
+generated-at: 2026-11-20T16:22:58.024761Z
 generator-version: v0.1.0

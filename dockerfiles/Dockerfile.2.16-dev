@@ -3,11 +3,18 @@
 #
 # DEV Dockerfile - uses dev branches and commits
 
-FROM registry.suse.com/bci/bci-base:16.0@sha256:ecda7b3f321d048b78f4c595961343f29683832998b90aa69bf5ac263d083943 AS builder
-RUN zypper refresh && zypper -n install git-core
+# TODO: make this part of the config and parameterize it
+FROM --platform=$BUILDPLATFORM rancher/rancher-assets:v2.16-20261118T1113Z-dev@sha256:502a9ef50ebd8a263c7c184cd8a8bb60cfa4d46c0841d2d7efe6a78142e1a30d AS rancher-assets-cache
+
+FROM --platform=$BUILDPLATFORM registry.suse.com/bci/bci-base:16.0@sha256:ecda7b3f321d048b78f4c595961343f29683832998b90aa69bf5ac263d083943 AS builder
+RUN zypper refresh && zypper -n install git-core && \
+    zypper ar -f https://rpm.rancher.io/pkgs/prime pkgs && \
+    rpm --import https://raw.githubusercontent.com/rancher/rancher/refs/heads/main/rancher-rpm-pkgs.key && \
+    zypper -n in -r pkgs helm4 yq && \
+    ln -s /usr/bin/helm4 /usr/bin/helm
 
 # Clone rancher-charts repository (DEV)
-FROM builder AS rancher-charts
+FROM --platform=$BUILDPLATFORM builder AS rancher-charts
 RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git config --global url."https://github.com/rancher/".insteadOf https://git.rancher.io/ && \
     git init /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721 && \
@@ -16,8 +23,13 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git fetch --depth 1 origin be5e9472a3ed1c58d464333801e98d695be141ac && \
     git update-ref --no-deref HEAD FETCH_HEAD
 
+# rancher/charts may no longer contain charts tarballs under `assets/`, but they are needed for airgap environments
+COPY --from=rancher-assets-cache /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721 /cache/rancher-charts
+COPY scripts/reconstruct-assets-dir.sh /reconstruct-assets-dir.sh
+RUN /reconstruct-assets-dir.sh /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721 /cache/rancher-charts
+
 # Clone partner-charts repository (DEV)
-FROM builder AS partner-charts
+FROM --platform=$BUILDPLATFORM builder AS partner-charts
 RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git config --global url."https://github.com/rancher/".insteadOf https://git.rancher.io/ && \
     git init /var/lib/rancher-data/local-catalogs/v2/rancher-partner-charts/8f17acdce9bffd6e05a58a3798840e408c4ea71783381ecd2e9af30baad65974 && \
@@ -27,7 +39,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git update-ref --no-deref HEAD FETCH_HEAD
 
 # Clone rke2-charts repository (DEV)
-FROM builder AS rke2-charts
+FROM --platform=$BUILDPLATFORM builder AS rke2-charts
 RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git config --global url."https://github.com/rancher/".insteadOf https://git.rancher.io/ && \
     git init /var/lib/rancher-data/local-catalogs/v2/rancher-rke2-charts/675f1b63a0a83905972dcab2794479ed599a6f41b86cd6193d69472d0fa889c9 && \
