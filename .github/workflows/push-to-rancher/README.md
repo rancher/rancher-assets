@@ -29,11 +29,51 @@ Can be configured to automatically call `push-to-rancher.yml` for releases (afte
 ## How it works
 
 For each target Rancher branch:
-1. Clone rancher/rancher
+1. Clone rancher/rancher. If the bot already has a PR open for the branch, its branch is checked out and the base branch is merged into it ([Updating a PR that is still open](#updating-a-pr-that-is-still-open)); otherwise a new branch is created
 2. Update `defaultAssetsImage` in `build.yaml`
 3. Run `go generate ./pkg/...` to update generated files
 4. Commit changes
-5. Push branch and create PR
+5. For a dev image of a branch on the staging catalog, update the chart pins and commit them as a second commit (see [Chart pins](#chart-pins))
+6. Push the branch, and create the PR, or update the title and the body of the open one
+
+## Updating a PR that is still open
+
+A new image often arrives while the PR of the previous one is not merged yet (new charts were staged in between). Instead of opening another PR next to it, the bot updates the open one.
+
+- **Which PR.** `find_open_bot_pr` (in `common.sh`) takes the newest open PR of the base branch whose head branch starts with `bot/rancher-assets-` and, when `APP_USER` is set, whose author is that app. Older bot PRs that are still open are left alone.
+- **How.** The branch of that PR is fetched and checked out, and the base branch is **merged into it** (never rebased: there is no force push). Then the image, `go generate`, and the pins are done as for a new PR, as new commits on top, and pushed as a fast-forward. The title (it has the tag in it) and the body of the PR are updated with `gh pr edit`.
+- **Conflicts are not handled one by one.** The lines that conflict with the base are the ones the bot sets (the image and the pins), so the merge uses `-X theirs`: the base wins, and the commits that follow set those lines again. Only adding the new commits would not remove a conflict: a line that both sides changed stays in conflict, because the common ancestor is the old one.
+- **If it cannot.** If the branch cannot be fetched, or the merge fails anyway, the PR is left as it is, a warning goes to the summary, and a new PR is opened, as it was before this existed. The same happens if `gh` cannot list the PRs.
+- **The body** lists what the whole branch moved against the base branch, not only what the last run moved.
+- **The same tag again** changes nothing: the image is already up to date, nothing is pushed and the PR is not edited.
+
+What it costs: every update is a push to the branch, so the checks of rancher/rancher run again, and a review of the PR may have to be repeated if the repository dismisses reviews on new commits. The PR also grows by the commits of each update, which a squash merge hides.
+
+## Chart pins
+
+`update-pins.sh` sets the pins of rancher/rancher to the newest staged version of each chart for the Rancher line of the image, in a second commit of the same PR, so that the pins do not have to be changed by hand after the image.
+
+**When it applies.** Only when both are true: the tag ends in `-dev`, and the `build.yaml` of the target branch has `chartDefaultBranch: staging`. Anything else (a production image, a line still on the old catalog system) exits with 3 and the PR has the image commit only.
+
+**Which version.** The charts commit inside the image is read from `lock.yaml` of the tag (`chart-versions.<minor>.upstream-refs.dev.charts.commit`), and its `index.yaml` from `rancher/charts` at that commit. For each pin, the version is the **first entry of the chart whose major is the one of the line**. The index is ordered by cargueiro, newest first, across every Rancher line, so the first entry of a chart can be a version of the next minor, and the major is what tells them apart. Chart versions are `1XY.Z.W+upA.B.C` and `1XY` follows the Rancher minor: 2.10 is 105, 2.16 is 111, 2.17 is 112 (`versions.majors` in `rules.yaml` of rancher/cargueiro), so the script uses `95 + minor`. Semver is not used: it ignores everything after the `+`, so two release candidates of the same upstream version compare equal.
+
+**What it sets.**
+
+| Pin | Chart | Where |
+|---|---|---|
+| `fleetVersion` | `fleet` | `build.yaml` |
+| `remoteDialerProxyVersion` | `remotedialer-proxy` | `build.yaml` |
+| `turtlesVersion` | `rancher-turtles` | `build.yaml` |
+| `webhookVersion` | `rancher-webhook` | `build.yaml` |
+| `aksOperatorVersion`, `eksOperatorVersion`, `gkeOperatorVersion` | `rancher-aks-operator`, `rancher-eks-operator`, `rancher-gke-operator` | `build.yaml`, if the branch has the key |
+| `clusterAPIControllerImage` | the image with `dependency: cluster-api` in the `helm.sh/images` of the turtles entry chosen above | `build.yaml` |
+| `CATTLE_SYSTEM_UPGRADE_CONTROLLER_CHART_VERSION` | `system-upgrade-controller` | `package/Dockerfile` |
+
+A key that the branch does not have is not added. A pin whose chart has no entry for the major of the line stays as it is, and the PR body says so.
+
+**It never blocks the image.** If the pins step fails (the index cannot be read, `go generate` fails, the commit fails) its changes are dropped, a warning goes to the summary, and the PR has the image commit only. If a check of rancher/rancher fails because of a chart, the second commit can be dropped from the branch and the image merged alone.
+
+**Tests.** `tests/update-pins_test.sh` runs the script against fixtures, and `tests/find_open_bot_pr_test.sh` tests the search of the open PR with a stub of `gh`; both need no network and no clone, and `scripts/test` runs them in CI. The update of an open PR as a whole (the merge, the conflicts, the title and the body) was tried against a local stand-in remote and a stub of `gh`, with the real index, for a first run, a base branch that moved with conflicts, an update, and a repeated run.
 
 ## Target branches
 
@@ -113,7 +153,8 @@ Options:
 |---|---|
 | `resolve-image-tag.sh` | (GHA only) Resolves image tag from git ref + rancher minor for manual triggers |
 | `update-build-yaml.sh` | Updates `defaultAssetsImage` in `build.yaml` using `yq` |
-| `create-prs.sh` | For each target branch: checkout, update, `go generate`, commit, push, create PR |
+| `update-pins.sh` | Sets the chart pins of a dev image of a branch on the staging catalog (see [Chart pins](#chart-pins)) |
+| `create-prs.sh` | For each target branch: checkout, update, `go generate`, commit, pins commit, push, create PR |
 | `run-gha.sh` | GHA entry point: validates image exists, clones rancher/rancher, calls create-prs.sh |
 | `run-local.sh` | Local entry point: parses args, sets up env, calls create-prs.sh |
 

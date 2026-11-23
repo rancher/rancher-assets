@@ -68,14 +68,42 @@ for TARGET_BRANCH in "${TARGET_BRANCHES[@]}"; do
     continue
   fi
 
-  # Create feature branch with target branch name for clarity
   # Convert release/v2.16 -> v2.16, main -> main
   TARGET_SUFFIX="${TARGET_BRANCH#release/}"
-  BRANCH_NAME="bot/rancher-assets-${TAG}-${TARGET_SUFFIX}-$(date +%s)"
-  if ! git -C "$RANCHER_DIR" checkout -b "$BRANCH_NAME" 2>&1; then
-    summary "  ⚠️  Failed to create branch \`$BRANCH_NAME\` - skipping"
-    FAILED_BRANCHES+=("$TARGET_BRANCH (branch creation failed)")
-    continue
+
+  # If the bot has a PR open for this branch (the previous image was not merged yet), it is updated with new commits on
+  # top of its branch, and no other PR is opened next to it. The base branch is merged into the branch first, never
+  # rebased, so there is no force push. Conflicts are not handled one by one: the lines that conflict are the ones that
+  # the bot sets (the image and the pins), so the base wins in the merge (-X theirs), and the commits that follow set
+  # those lines again. Pushing new commits alone would not do: a line that both sides changed stays in conflict with the
+  # base whatever the new commits say, because the common ancestor is the old one. If the branch cannot be fetched or the
+  # merge fails anyway, the PR is left as it is and a new one is opened, as it always was.
+  EXISTING_PR=""
+  EXISTING=$(find_open_bot_pr "$TARGET_BRANCH")
+  if [ -n "$EXISTING" ]; then
+    EXISTING_PR="${EXISTING%% *}"
+    BRANCH_NAME="${EXISTING#* }"
+    log "  - The bot has PR #${EXISTING_PR} open for \`$TARGET_BRANCH\` (\`$BRANCH_NAME\`)"
+    if git -C "$RANCHER_DIR" fetch "$RANCHER_REMOTE" "+refs/heads/${BRANCH_NAME}:refs/remotes/${RANCHER_REMOTE}/${BRANCH_NAME}" >/dev/null 2>&1 &&
+      git -C "$RANCHER_DIR" checkout -q -B "$BRANCH_NAME" "$RANCHER_REMOTE/$BRANCH_NAME" >/dev/null 2>&1 &&
+      git -C "$RANCHER_DIR" merge -q --no-edit -X theirs "$RANCHER_REMOTE/$TARGET_BRANCH" >/dev/null 2>&1; then
+      summary "  - Updating the open PR #${EXISTING_PR}"
+    else
+      summary "  ⚠️  PR #${EXISTING_PR} cannot be updated (its branch cannot be fetched, or the merge of \`$TARGET_BRANCH\` into it fails): a new PR is opened, and #${EXISTING_PR} stays open"
+      git -C "$RANCHER_DIR" merge --abort >/dev/null 2>&1 || true
+      git -C "$RANCHER_DIR" checkout -q -f -B "$TARGET_BRANCH" "$RANCHER_REMOTE/$TARGET_BRANCH"
+      EXISTING_PR=""
+    fi
+  fi
+
+  if [ -z "$EXISTING_PR" ]; then
+    # Create feature branch with target branch name for clarity
+    BRANCH_NAME="bot/rancher-assets-${TAG}-${TARGET_SUFFIX}-$(date +%s)"
+    if ! git -C "$RANCHER_DIR" checkout -b "$BRANCH_NAME" 2>&1; then
+      summary "  ⚠️  Failed to create branch \`$BRANCH_NAME\` - skipping"
+      FAILED_BRANCHES+=("$TARGET_BRANCH (branch creation failed)")
+      continue
+    fi
   fi
 
   # Update build.yaml
@@ -154,6 +182,52 @@ Created-by: rancher-assets-release-integration"
     continue
   fi
 
+  # Chart pins, as a second commit, for the dev images of a branch on the staging catalog (the script decides). A
+  # problem here never stops the image from being updated: the changes of the pins are dropped and the PR has the
+  # image only.
+  PINS_REPORT=$(mktemp)
+  PINS_COMMITTED=false
+  PINS_IN_PR=false
+  PINS_EXIT=0
+  # build.yaml and package/Dockerfile of the base branch: when an open PR is updated, the report is about what the
+  # whole branch moved, not only about what this run moved
+  BASE_BUILD_YAML=$(mktemp)
+  BASE_DOCKERFILE=$(mktemp)
+  git -C "$RANCHER_DIR" show "$RANCHER_REMOTE/$TARGET_BRANCH:build.yaml" >"$BASE_BUILD_YAML" 2>/dev/null || : >"$BASE_BUILD_YAML"
+  git -C "$RANCHER_DIR" show "$RANCHER_REMOTE/$TARGET_BRANCH:package/Dockerfile" >"$BASE_DOCKERFILE" 2>/dev/null || : >"$BASE_DOCKERFILE"
+  PINS_REPORT_FILE="$PINS_REPORT" BASE_BUILD_YAML="$BASE_BUILD_YAML" BASE_DOCKERFILE="$BASE_DOCKERFILE" \
+    bash "$SCRIPT_DIR/update-pins.sh" || PINS_EXIT=$?
+  if [ "$PINS_EXIT" -eq 0 ]; then
+    PINS_GENERATE_EXIT=0
+    PINS_GENERATE_OUTPUT=$(cd "$RANCHER_DIR" && eval "$GENERATE_CMD" 2>&1) || PINS_GENERATE_EXIT=$?
+    PINS_COMMIT_EXIT=0
+    if [ "$PINS_GENERATE_EXIT" -eq 0 ]; then
+      commit_if_changed "Update the chart pins to the ones of the charts in ${TAG}
+
+The pins of the charts that are in the rancher-assets image ${TAG}: the first entry of each chart
+in the index.yaml of the charts commit inside the image, for the Rancher line of the branch.
+
+Automation: push-to-rancher
+Created-by: rancher-assets-release-integration" || PINS_COMMIT_EXIT=$?
+    fi
+    if [ "$PINS_GENERATE_EXIT" -eq 0 ] && [ "$PINS_COMMIT_EXIT" -eq 0 ]; then
+      PINS_COMMITTED=true
+      summary "  ✓ Chart pins committed"
+    else
+      summary "  ⚠️  The chart pins could not be committed (go generate exit ${PINS_GENERATE_EXIT}, commit exit ${PINS_COMMIT_EXIT}) - the PR has the image only"
+      [ "$PINS_GENERATE_EXIT" -ne 0 ] && echo "$PINS_GENERATE_OUTPUT" | sed 's/^/    /'
+      git -C "$RANCHER_DIR" reset -q --hard HEAD
+    fi
+  elif [ "$PINS_EXIT" -ne 2 ] && [ "$PINS_EXIT" -ne 3 ]; then
+    summary "  ⚠️  The chart pins could not be updated (exit ${PINS_EXIT}) - the PR has the image only"
+    git -C "$RANCHER_DIR" reset -q --hard HEAD
+  fi
+  # The body lists the pins that the branch moved against the base. That is also true when this run had nothing new to
+  # move (exit 2) because an earlier update of the same PR had moved them already.
+  if { [ "$PINS_COMMITTED" = "true" ] || [ "$PINS_EXIT" -eq 2 ]; } && grep -q '^Moved:' "$PINS_REPORT"; then
+    PINS_IN_PR=true
+  fi
+
   if [ "$DRY_RUN" = "true" ]; then
     summary "  ✓ Changes committed (dry-run, not pushing)"
     git -C "$RANCHER_DIR" checkout -f "$TARGET_BRANCH"
@@ -178,9 +252,11 @@ Created-by: rancher-assets-release-integration"
     continue
   fi
 
-  # Create PR
-  log "  - Creating PR..."
-  log "    Running: gh pr create --repo rancher/rancher --base $TARGET_BRANCH --head $BRANCH_NAME"
+  # Create PR (or update the open one)
+  if [ -z "$EXISTING_PR" ]; then
+    log "  - Creating PR..."
+    log "    Running: gh pr create --repo rancher/rancher --base $TARGET_BRANCH --head $BRANCH_NAME"
+  fi
 
   # Format branch name for title: strip "release/" prefix
   BRANCH_LABEL="${TARGET_BRANCH#release/}"
@@ -191,6 +267,40 @@ Update rancher-assets image to [\`${TAG}\`](https://github.com/${SOURCE_REPO}/re
 ## Changes
 - Updated \`defaultAssetsImage\` in \`build.yaml\`
 - Ran \`go generate ./pkg/...\` to update generated files"
+
+  if [ "$PINS_IN_PR" = "true" ]; then
+    PR_BODY="${PR_BODY}
+
+## Chart pins
+The commits named \`Update the chart pins ...\` set the chart pins to the newest staged version of each chart for this Rancher line. If a check fails because of one of these charts, those commits can be dropped from the branch and the image bump merged alone. The list below is what the whole branch moved against \`${TARGET_BRANCH}\`.
+
+$(cat "$PINS_REPORT")"
+  fi
+
+  # An open PR was updated by the push above: the title has the tag in it, so it changes too, and so does the body
+  if [ -n "$EXISTING_PR" ]; then
+    log "  - Updating PR #${EXISTING_PR}..."
+    EDIT_OUTPUT=$(gh pr edit "$EXISTING_PR" \
+      --repo rancher/rancher \
+      --title "[${BRANCH_LABEL}] Update rancher-assets to ${TAG}" \
+      --body "$PR_BODY" 2>&1)
+    EDIT_EXIT=$?
+    if [ $EDIT_EXIT -eq 0 ]; then
+      summary "  ✓ PR updated: https://github.com/rancher/rancher/pull/${EXISTING_PR}"
+      CREATED_PRS+=("https://github.com/rancher/rancher/pull/${EXISTING_PR} (updated)")
+      CREATED_PR_BRANCHES+=("$TARGET_BRANCH")
+    else
+      summary "  ⚠️  The branch of PR #${EXISTING_PR} was pushed, but its title and body could not be updated (exit code: $EDIT_EXIT)"
+      summary '    ```'
+      echo "$EDIT_OUTPUT" | while IFS= read -r line; do
+        summary "    $line"
+      done
+      summary '    ```'
+      FAILED_BRANCHES+=("$TARGET_BRANCH (PR update failed)")
+    fi
+    git -C "$RANCHER_DIR" checkout -f "$TARGET_BRANCH"
+    continue
+  fi
 
   # Try creating PR with label first
   PR_OUTPUT=$(gh pr create \
@@ -236,13 +346,13 @@ Update rancher-assets image to [\`${TAG}\`](https://github.com/${SOURCE_REPO}/re
 done
 
 summary ""
-summary "## Pull Requests Created"
+summary "## Pull Requests Created or Updated"
 if [ ${#CREATED_PRS[@]} -gt 0 ]; then
   for i in "${!CREATED_PRS[@]}"; do
     summary "- **${CREATED_PR_BRANCHES[$i]}**: ${CREATED_PRS[$i]}"
   done
 else
-  summary "_No PRs were created in this run_"
+  summary "_No PRs were created or updated in this run_"
 fi
 
 summary ""

@@ -5,3 +5,7 @@ cd $(dirname $0)/..
 
 echo "Running unit tests"
 go test -cover -tags=test ./...
+
+echo "Running the tests of the push-to-rancher scripts"
+./.github/workflows/push-to-rancher/tests/update-pins_test.sh
+./.github/workflows/push-to-rancher/tests/find_open_bot_pr_test.sh
