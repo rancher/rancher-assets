@@ -38,20 +38,20 @@ export STUB_JSON='[
  {"number":58986,"headRefName":"bot/rancher-assets-v2.16-20261123T1119Z-dev-v2.16-3","createdAt":"2026-11-23T11:27:00Z",'"$BOT"'},
  {"number":58868,"headRefName":"bot/rancher-assets-v2.16-20261118T1113Z-dev-v2.16-2","createdAt":"2026-11-18T11:19:00Z",'"$BOT"'}]'
 unset APP_USER
-check "the newest bot PR is the one found" "58986 bot/rancher-assets-v2.16-20261123T1119Z-dev-v2.16-3" "$(find_open_bot_pr release/v2.16)"
+check "the newest bot PR is the one found" "58986 bot/rancher-assets-v2.16-20261123T1119Z-dev-v2.16-3 2026-11-23T11:27:00Z" "$(find_open_bot_pr release/v2.16)"
 
 # a PR that is not the bot's, whatever its date
 export STUB_JSON='[
  {"number":58880,"headRefName":"test/charts-staging-main","createdAt":"2026-11-23T12:00:00Z",'"$HUMAN"'},
  {"number":58985,"headRefName":"bot/rancher-assets-v2.16-20261123T1119Z-dev-main-3","createdAt":"2026-11-23T11:27:00Z",'"$BOT"'}]'
-check "a branch that is not the bot's is ignored, even if newer" "58985 bot/rancher-assets-v2.16-20261123T1119Z-dev-main-3" "$(find_open_bot_pr main)"
+check "a branch that is not the bot's is ignored, even if newer" "58985 bot/rancher-assets-v2.16-20261123T1119Z-dev-main-3 2026-11-23T11:27:00Z" "$(find_open_bot_pr main)"
 
 # the author, when the app is known
 export STUB_JSON='[
  {"number":1,"headRefName":"bot/rancher-assets-v2.16-x-main-1","createdAt":"2026-11-23T12:00:00Z",'"$HUMAN"'},
  {"number":2,"headRefName":"bot/rancher-assets-v2.16-y-main-2","createdAt":"2026-11-22T12:00:00Z",'"$BOT"'}]'
-check "without the app, the branch name is enough" "1 bot/rancher-assets-v2.16-x-main-1" "$(unset APP_USER; find_open_bot_pr main)"
-check "with the app, a PR of another author is ignored" "2 bot/rancher-assets-v2.16-y-main-2" "$(APP_USER='rancher-pr-actions-write[bot]' find_open_bot_pr main)"
+check "without the app, the branch name is enough" "1 bot/rancher-assets-v2.16-x-main-1 2026-11-23T12:00:00Z" "$(unset APP_USER; find_open_bot_pr main)"
+check "with the app, a PR of another author is ignored" "2 bot/rancher-assets-v2.16-y-main-2 2026-11-22T12:00:00Z" "$(APP_USER='rancher-pr-actions-write[bot]' find_open_bot_pr main)"
 
 # nothing to find
 export STUB_JSON='[]'
