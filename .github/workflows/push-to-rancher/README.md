@@ -33,7 +33,34 @@ For each target Rancher branch:
 2. Update `defaultAssetsImage` in `build.yaml`
 3. Run `go generate ./pkg/...` to update generated files
 4. Commit changes
-5. Push branch and create PR
+5. For a dev image of a branch on the staging catalog, update the chart pins and commit them as a second commit (see [Chart pins](#chart-pins))
+6. Push branch and create PR
+
+## Chart pins
+
+`update-pins.sh` sets the pins of rancher/rancher to the newest staged version of each chart for the Rancher line of the image, in a second commit of the same PR, so that the pins do not have to be changed by hand after the image.
+
+**When it applies.** Only when both are true: the tag ends in `-dev`, and the `build.yaml` of the target branch has `chartDefaultBranch: staging`. Anything else (a production image, a line still on the old catalog system) exits with 3 and the PR has the image commit only.
+
+**Which version.** The charts commit inside the image is read from `lock.yaml` of the tag (`chart-versions.<minor>.upstream-refs.dev.charts.commit`), and its `index.yaml` from `rancher/charts` at that commit. For each pin, the version is the **first entry of the chart whose major is the one of the line**. The index is ordered by cargueiro, newest first, across every Rancher line, so the first entry of a chart can be a version of the next minor, and the major is what tells them apart. Chart versions are `1XY.Z.W+upA.B.C` and `1XY` follows the Rancher minor: 2.10 is 105, 2.16 is 111, 2.17 is 112 (`versions.majors` in `rules.yaml` of rancher/cargueiro), so the script uses `95 + minor`. Semver is not used: it ignores everything after the `+`, so two release candidates of the same upstream version compare equal.
+
+**What it sets.**
+
+| Pin | Chart | Where |
+|---|---|---|
+| `fleetVersion` | `fleet` | `build.yaml` |
+| `remoteDialerProxyVersion` | `remotedialer-proxy` | `build.yaml` |
+| `turtlesVersion` | `rancher-turtles` | `build.yaml` |
+| `webhookVersion` | `rancher-webhook` | `build.yaml` |
+| `aksOperatorVersion`, `eksOperatorVersion`, `gkeOperatorVersion` | `rancher-aks-operator`, `rancher-eks-operator`, `rancher-gke-operator` | `build.yaml`, if the branch has the key |
+| `clusterAPIControllerImage` | the image with `dependency: cluster-api` in the `helm.sh/images` of the turtles entry chosen above | `build.yaml` |
+| `CATTLE_SYSTEM_UPGRADE_CONTROLLER_CHART_VERSION` | `system-upgrade-controller` | `package/Dockerfile` |
+
+A key that the branch does not have is not added. A pin whose chart has no entry for the major of the line stays as it is, and the PR body says so.
+
+**It never blocks the image.** If the pins step fails (the index cannot be read, `go generate` fails, the commit fails) its changes are dropped, a warning goes to the summary, and the PR has the image commit only. If a check of rancher/rancher fails because of a chart, the second commit can be dropped from the branch and the image merged alone.
+
+**Tests.** `tests/update-pins_test.sh` runs the script against fixtures, with no network and no clone; `scripts/test` runs it in CI.
 
 ## Target branches
 
@@ -113,7 +140,8 @@ Options:
 |---|---|
 | `resolve-image-tag.sh` | (GHA only) Resolves image tag from git ref + rancher minor for manual triggers |
 | `update-build-yaml.sh` | Updates `defaultAssetsImage` in `build.yaml` using `yq` |
-| `create-prs.sh` | For each target branch: checkout, update, `go generate`, commit, push, create PR |
+| `update-pins.sh` | Sets the chart pins of a dev image of a branch on the staging catalog (see [Chart pins](#chart-pins)) |
+| `create-prs.sh` | For each target branch: checkout, update, `go generate`, commit, pins commit, push, create PR |
 | `run-gha.sh` | GHA entry point: validates image exists, clones rancher/rancher, calls create-prs.sh |
 | `run-local.sh` | Local entry point: parses args, sets up env, calls create-prs.sh |
 
