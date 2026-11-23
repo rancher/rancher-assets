@@ -7,8 +7,14 @@ Automates opening PRs against this repository when `make update` detects changes
 ### `.github/workflows/pr-builder-cron.yml`
 
 Scheduled workflow that:
-- **Runs on schedule** via cron (11:00 UTC Monday-Friday)
+- **Runs on schedule** via cron (11:00 UTC Monday and Wednesday)
 - **Manually triggered** via `workflow_dispatch`
+- **Triggered by rancher/charts** via `repository_dispatch` of type `charts-staged-pinned`: a workflow of `staging` sends it
+  when a chart that Rancher pins (see `push-to-rancher/update-pins.sh`) is added to `staging`, so a new version of it does
+  not wait for the schedule. The schedule stays: it also covers the charts that are not pinned, and a dispatch that failed.
+  Nothing happens when the dispatch finds no change (step 4 below). The sender waits 20 minutes after the last merge before
+  it sends, so two dispatches are never close enough to open two bump PRs for the same change: this workflow has no
+  concurrency group and does not look for a bump PR that is still open, and a bump PR takes some minutes to be merged.
 
 ## How it works
 

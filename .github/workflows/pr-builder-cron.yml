@@ -10,6 +10,10 @@ on:
         type: string
   schedule:
     - cron: '0 11 * * 1,3' # Runs at 11:00 UTC Monday and Wednesday
+  # Sent by rancher/charts when a chart that Rancher pins is staged (see the README of bump-pr-builder). It runs from the
+  # default branch, so target_branch is not set and the bump goes against main, as in the schedule.
+  repository_dispatch:
+    types: [charts-staged-pinned]
 
 permissions:
   contents: write
