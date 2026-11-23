@@ -20,6 +20,7 @@ fresh() {
 run() {
   EXIT=0
   TAG="$1" RANCHER_DIR="$WORK" INDEX_FILE="$HERE/fixtures/index.yaml" PINS_REPORT_FILE="$REPORT" \
+    BASE_BUILD_YAML="${BASE_BUILD_YAML:-}" BASE_DOCKERFILE="${BASE_DOCKERFILE:-}" \
     bash "$SCRIPT" >"$WORK/out.log" 2>&1 || EXIT=$?
 }
 
@@ -73,6 +74,17 @@ check "not a dev image: pins untouched" "111.0.1+up0.12.1-rc.21" "$(val webhookV
 fresh; yq eval -i '.chartDefaultBranch = "dev-v2.16"' "$WORK/build.yaml"; run v2.16-20261120T1935Z-dev
 check "branch on the old system: exit 3" 3 "$EXIT"
 check "branch on the old system: pins untouched" "111.0.1+up0.12.1-rc.21" "$(val webhookVersion)"
+
+# 7. a branch that already has the pins of an earlier update (the PR is updated, not created): nothing is changed, and
+#    the report still says what moved against the base branch, which is what the PR is about
+fresh; run v2.16-20261120T1935Z-dev
+BASE_BUILD_YAML="$HERE/fixtures/build.yaml" BASE_DOCKERFILE="$HERE/fixtures/package/Dockerfile" run v2.16-20261120T1935Z-dev
+check "already updated branch: nothing to change, exit 2" 2 "$EXIT"
+check "...but the report lists a pin moved against the base" 1 "$(grep -c 'webhookVersion.*111.0.1+up0.12.1-rc.21.*111.0.1+up0.12.1-rc.22' "$REPORT")"
+check "...and the system-upgrade-controller version against the base" 1 "$(grep -c 'CATTLE_SYSTEM_UPGRADE_CONTROLLER_CHART_VERSION.*111.0.1.*111.0.2' "$REPORT")"
+check "...and the cluster-api image against the base" 1 "$(grep -c 'clusterAPIControllerImage.*turtles.1.*turtles.3' "$REPORT")"
+check "...and a pin that did not move against the base is not listed" 0 "$(grep -c 'aksOperatorVersion.*111.0.0+up1.16.0-rc.8.*111.0.0+up1.16.0-rc.8' "$REPORT")"
+BASE_BUILD_YAML=""; BASE_DOCKERFILE=""
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures check(s) failed"

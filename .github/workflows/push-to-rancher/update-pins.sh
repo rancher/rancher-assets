@@ -20,6 +20,10 @@
 #   SOURCE_REPO      - repo of the tag, to read its lock.yaml (default rancher/rancher-assets)
 #   CHARTS_REPO      - the charts repository (default rancher/charts)
 #   INDEX_FILE       - use this index.yaml and do not read the lock.yaml or the network (for tests)
+#   BASE_BUILD_YAML  - the build.yaml of the base branch, and BASE_DOCKERFILE its package/Dockerfile. When the PR is an
+#                      earlier one that is being updated, the pins may have been moved by an earlier commit of the
+#                      branch: with these the report lists what moved against the base branch, which is what the PR is
+#                      about, and not only what this run moved. What is changed in RANCHER_DIR does not depend on them.
 #
 # Exit codes:
 #   0 - updated
@@ -106,9 +110,21 @@ CHANGED=0
 MOVED=()
 SKIPPED=()
 
+# The value that the report shows as the old one: the one of the base branch if it is given, else the current one
+base_value() { # base_value <key> <current>
+  local value=""
+  if [ -n "${BASE_BUILD_YAML:-}" ] && [ -f "$BASE_BUILD_YAML" ]; then
+    value=$(KEY="$1" yq eval '.[strenv(KEY)]' "$BASE_BUILD_YAML")
+  fi
+  if [ -z "$value" ] || [ "$value" = "null" ]; then
+    value="$2"
+  fi
+  echo "$value"
+}
+
 # set_pin <key in build.yaml> <chart name>; prints the new version of the chart on stdout
 set_pin() {
-  local key="$1" chart="$2" current new
+  local key="$1" chart="$2" current new shown
   current=$(KEY="$key" yq eval '.[strenv(KEY)]' "$BUILD_YAML")
   if [ "$current" = "null" ]; then
     return 0 # this branch does not have the pin
@@ -120,8 +136,11 @@ set_pin() {
   fi
   if [ "$current" != "$new" ]; then
     KEY="$key" NEW="$new" yq eval -i '.[strenv(KEY)] = strenv(NEW)' "$BUILD_YAML"
-    MOVED+=("- \`$key\`: \`$current\` → \`$new\`")
     CHANGED=1
+  fi
+  shown=$(base_value "$key" "$current")
+  if [ "$shown" != "$new" ]; then
+    MOVED+=("- \`$key\`: \`$shown\` → \`$new\`")
   fi
 }
 
@@ -141,10 +160,15 @@ if [ "$CAPI_CURRENT" != "null" ] && [ -n "$TURTLES" ]; then
     '.entries[strenv(CHART)][] | select(.version == strenv(VERSION)) | .annotations["helm.sh/images"]' "$INDEX" |
     yq eval 'map(select(.dependency == "cluster-api")) | .[0].image' -)
   [ "$CAPI_NEW" = "null" ] && CAPI_NEW=""
-  if [ -n "$CAPI_NEW" ] && [ "$CAPI_NEW" != "$CAPI_CURRENT" ]; then
-    IMAGE="$CAPI_NEW" yq eval -i '.clusterAPIControllerImage = strenv(IMAGE)' "$BUILD_YAML"
-    MOVED+=("- \`clusterAPIControllerImage\`: \`$CAPI_CURRENT\` → \`$CAPI_NEW\` (from the turtles chart \`$TURTLES\`)")
-    CHANGED=1
+  if [ -n "$CAPI_NEW" ]; then
+    if [ "$CAPI_NEW" != "$CAPI_CURRENT" ]; then
+      IMAGE="$CAPI_NEW" yq eval -i '.clusterAPIControllerImage = strenv(IMAGE)' "$BUILD_YAML"
+      CHANGED=1
+    fi
+    CAPI_SHOWN=$(base_value clusterAPIControllerImage "$CAPI_CURRENT")
+    if [ "$CAPI_SHOWN" != "$CAPI_NEW" ]; then
+      MOVED+=("- \`clusterAPIControllerImage\`: \`$CAPI_SHOWN\` → \`$CAPI_NEW\` (from the turtles chart \`$TURTLES\`)")
+    fi
   fi
 fi
 
@@ -155,10 +179,18 @@ if [ -f "$DOCKERFILE" ] && grep -q "^${SUC_LINE}" "$DOCKERFILE"; then
   SUC_NEW=$(latest_version system-upgrade-controller)
   if [ -z "$SUC_NEW" ]; then
     SKIPPED+=("- \`CATTLE_SYSTEM_UPGRADE_CONTROLLER_CHART_VERSION\`: the index has no \`system-upgrade-controller\` of the line (major $MAJOR), so \`$SUC_CURRENT\` stays")
-  elif [ "$SUC_CURRENT" != "$SUC_NEW" ]; then
-    sed -i "s|^${SUC_LINE}.*|${SUC_LINE}${SUC_NEW}|" "$DOCKERFILE"
-    MOVED+=("- \`CATTLE_SYSTEM_UPGRADE_CONTROLLER_CHART_VERSION\` (\`package/Dockerfile\`): \`$SUC_CURRENT\` → \`$SUC_NEW\`")
-    CHANGED=1
+  else
+    if [ "$SUC_CURRENT" != "$SUC_NEW" ]; then
+      sed -i "s|^${SUC_LINE}.*|${SUC_LINE}${SUC_NEW}|" "$DOCKERFILE"
+      CHANGED=1
+    fi
+    SUC_SHOWN="$SUC_CURRENT"
+    if [ -n "${BASE_DOCKERFILE:-}" ] && [ -f "$BASE_DOCKERFILE" ] && grep -q "^${SUC_LINE}" "$BASE_DOCKERFILE"; then
+      SUC_SHOWN=$(grep "^${SUC_LINE}" "$BASE_DOCKERFILE" | head -1 | cut -d= -f2)
+    fi
+    if [ "$SUC_SHOWN" != "$SUC_NEW" ]; then
+      MOVED+=("- \`CATTLE_SYSTEM_UPGRADE_CONTROLLER_CHART_VERSION\` (\`package/Dockerfile\`): \`$SUC_SHOWN\` → \`$SUC_NEW\`")
+    fi
   fi
 fi
 
