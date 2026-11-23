@@ -184,3 +184,22 @@ commit_if_changed() {
 
   return 0
 }
+
+# The newest open PR of this bot for a base branch of rancher/rancher: prints "<number> <head branch>", or nothing.
+# The branches of the bot start with bot/rancher-assets-. When APP_USER is set (the slug of the app, with [bot]) the
+# author of the PR must be that app too. If gh cannot list the PRs nothing is printed and it is not an error: the caller
+# opens a new PR, as it did before it looked for one.
+find_open_bot_pr() {
+  local base="$1" json author=""
+  if [ -n "${APP_USER:-}" ]; then
+    author="app/${APP_USER%\[bot\]}"
+  fi
+  if ! json=$(gh pr list --repo rancher/rancher --base "$base" --state open --limit 100 \
+    --json number,headRefName,createdAt,author 2>/dev/null); then
+    echo "WARNING: could not list the open PRs of $base: a new PR will be opened" >&2
+    return 0
+  fi
+  AUTHOR="$author" yq eval -p=json \
+    '[.[] | select(.headRefName | test("^bot/rancher-assets-")) | select(strenv(AUTHOR) == "" or .author.login == strenv(AUTHOR))]
+     | sort_by(.createdAt) | reverse | .[0] | select(. != null) | (.number | tostring) + " " + .headRefName' - <<<"$json"
+}
