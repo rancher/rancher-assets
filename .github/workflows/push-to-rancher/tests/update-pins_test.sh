@@ -52,7 +52,7 @@ check "other Dockerfile lines are untouched" "ENV CATTLE_OTHER=unchanged" "$(gre
 check "a chart with no entry for the major keeps its pin" "111.0.0+up1.16.0-rc.6" "$(val eksOperatorVersion)"
 check "a key that the branch does not have is not added" "null" "$(val gkeOperatorVersion)"
 check "the image tag is not touched" "rancher/rancher-assets:v2.16-20261120T1507Z-dev" "$(val defaultAssetsImage)"
-check "comments of build.yaml are kept" "2" "$(grep -c '^# ' "$WORK/build.yaml")"
+check "comments of build.yaml are kept" "3" "$(grep -c '^# ' "$WORK/build.yaml")"
 
 # 3. the report says what moved and what was skipped
 check "report lists a moved pin" 1 "$(grep -c 'webhookVersion.*111.0.1+up0.12.1-rc.21.*111.0.1+up0.12.1-rc.22' "$REPORT")"
