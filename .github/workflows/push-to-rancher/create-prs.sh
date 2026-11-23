@@ -154,6 +154,39 @@ Created-by: rancher-assets-release-integration"
     continue
   fi
 
+  # Chart pins, as a second commit, for the dev images of a branch on the staging catalog (the script decides). A
+  # problem here never stops the image from being updated: the changes of the pins are dropped and the PR has the
+  # image only.
+  PINS_REPORT=$(mktemp)
+  PINS_COMMITTED=false
+  PINS_EXIT=0
+  PINS_REPORT_FILE="$PINS_REPORT" bash "$SCRIPT_DIR/update-pins.sh" || PINS_EXIT=$?
+  if [ "$PINS_EXIT" -eq 0 ]; then
+    PINS_GENERATE_EXIT=0
+    PINS_GENERATE_OUTPUT=$(cd "$RANCHER_DIR" && eval "$GENERATE_CMD" 2>&1) || PINS_GENERATE_EXIT=$?
+    PINS_COMMIT_EXIT=0
+    if [ "$PINS_GENERATE_EXIT" -eq 0 ]; then
+      commit_if_changed "Update the chart pins to the ones of the charts in ${TAG}
+
+The pins of the charts that are in the rancher-assets image ${TAG}: the first entry of each chart
+in the index.yaml of the charts commit inside the image, for the Rancher line of the branch.
+
+Automation: push-to-rancher
+Created-by: rancher-assets-release-integration" || PINS_COMMIT_EXIT=$?
+    fi
+    if [ "$PINS_GENERATE_EXIT" -eq 0 ] && [ "$PINS_COMMIT_EXIT" -eq 0 ]; then
+      PINS_COMMITTED=true
+      summary "  ✓ Chart pins committed"
+    else
+      summary "  ⚠️  The chart pins could not be committed (go generate exit ${PINS_GENERATE_EXIT}, commit exit ${PINS_COMMIT_EXIT}) - the PR has the image only"
+      [ "$PINS_GENERATE_EXIT" -ne 0 ] && echo "$PINS_GENERATE_OUTPUT" | sed 's/^/    /'
+      git -C "$RANCHER_DIR" reset -q --hard HEAD
+    fi
+  elif [ "$PINS_EXIT" -ne 2 ] && [ "$PINS_EXIT" -ne 3 ]; then
+    summary "  ⚠️  The chart pins could not be updated (exit ${PINS_EXIT}) - the PR has the image only"
+    git -C "$RANCHER_DIR" reset -q --hard HEAD
+  fi
+
   if [ "$DRY_RUN" = "true" ]; then
     summary "  ✓ Changes committed (dry-run, not pushing)"
     git -C "$RANCHER_DIR" checkout -f "$TARGET_BRANCH"
@@ -191,6 +224,15 @@ Update rancher-assets image to [\`${TAG}\`](https://github.com/${SOURCE_REPO}/re
 ## Changes
 - Updated \`defaultAssetsImage\` in \`build.yaml\`
 - Ran \`go generate ./pkg/...\` to update generated files"
+
+  if [ "$PINS_COMMITTED" = "true" ]; then
+    PR_BODY="${PR_BODY}
+
+## Chart pins
+The second commit sets the chart pins to the newest staged version of each chart for this Rancher line. If a check fails because of one of these charts, that commit can be dropped from the branch and the image bump merged alone.
+
+$(cat "$PINS_REPORT")"
+  fi
 
   # Try creating PR with label first
   PR_OUTPUT=$(gh pr create \
