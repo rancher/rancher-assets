@@ -185,7 +185,8 @@ commit_if_changed() {
   return 0
 }
 
-# The newest open PR of this bot for a base branch of rancher/rancher: prints "<number> <head branch>", or nothing.
+# The newest open PR of this bot for a base branch of rancher/rancher: prints "<number> <head branch> <created at>", or
+# nothing. The creation time tells how far back the history must go to find where the branch started.
 # The branches of the bot start with bot/rancher-assets-. When APP_USER is set (the slug of the app, with [bot]) the
 # author of the PR must be that app too. If gh cannot list the PRs nothing is printed and it is not an error: the caller
 # opens a new PR, as it did before it looked for one.
@@ -201,5 +202,5 @@ find_open_bot_pr() {
   fi
   AUTHOR="$author" yq eval -p=json \
     '[.[] | select(.headRefName | test("^bot/rancher-assets-")) | select(strenv(AUTHOR) == "" or .author.login == strenv(AUTHOR))]
-     | sort_by(.createdAt) | reverse | .[0] | select(. != null) | (.number | tostring) + " " + .headRefName' - <<<"$json"
+     | sort_by(.createdAt) | reverse | .[0] | select(. != null) | (.number | tostring) + " " + .headRefName + " " + .createdAt' - <<<"$json"
 }

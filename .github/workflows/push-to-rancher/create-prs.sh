@@ -81,10 +81,20 @@ for TARGET_BRANCH in "${TARGET_BRANCHES[@]}"; do
   EXISTING_PR=""
   EXISTING=$(find_open_bot_pr "$TARGET_BRANCH")
   if [ -n "$EXISTING" ]; then
-    EXISTING_PR="${EXISTING%% *}"
-    BRANCH_NAME="${EXISTING#* }"
+    read -r EXISTING_PR BRANCH_NAME EXISTING_CREATED <<<"$EXISTING"
     log "  - The bot has PR #${EXISTING_PR} open for \`$TARGET_BRANCH\` (\`$BRANCH_NAME\`)"
-    if git -C "$RANCHER_DIR" fetch "$RANCHER_REMOTE" "+refs/heads/${BRANCH_NAME}:refs/remotes/${RANCHER_REMOTE}/${BRANCH_NAME}" >/dev/null 2>&1 &&
+    # The clone of Actions is shallow: it has one commit of the base branch. If the base moved after the PR was opened,
+    # the commit where the branch started is not in the clone and git refuses to merge ("unrelated histories"). So the
+    # history is fetched back to a day before the PR was opened, for the base and for the branch. Only a shallow clone
+    # is asked for it: asking a complete one would make it shallow.
+    SINCE_ARGS=()
+    if [ "$(git -C "$RANCHER_DIR" rev-parse --is-shallow-repository)" = "true" ]; then
+      if EXISTING_SINCE=$(date -u -d "${EXISTING_CREATED} - 1 day" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null); then
+        SINCE_ARGS=(--shallow-since="$EXISTING_SINCE")
+      fi
+    fi
+    if git -C "$RANCHER_DIR" fetch ${SINCE_ARGS[@]+"${SINCE_ARGS[@]}"} "$RANCHER_REMOTE" "$TARGET_BRANCH" \
+      "+refs/heads/${BRANCH_NAME}:refs/remotes/${RANCHER_REMOTE}/${BRANCH_NAME}" >/dev/null 2>&1 &&
       git -C "$RANCHER_DIR" checkout -q -B "$BRANCH_NAME" "$RANCHER_REMOTE/$BRANCH_NAME" >/dev/null 2>&1 &&
       git -C "$RANCHER_DIR" merge -q --no-edit -X theirs "$RANCHER_REMOTE/$TARGET_BRANCH" >/dev/null 2>&1; then
       summary "  - Updating the open PR #${EXISTING_PR}"
