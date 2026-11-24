@@ -20,7 +20,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git init /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721 && \
     cd /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721 && \
     git remote add origin https://github.com/rancher/charts && \
-    git fetch --depth 1 origin 552ebfc2806d9479dcf8bd371846d70447b5675a && \
+    git fetch --depth 1 origin 0ab41f2cbc33453f56b9797ba1f39eab867980cc && \
     git update-ref --no-deref HEAD FETCH_HEAD
 
 # rancher/charts may no longer contain charts tarballs under `assets/`, but they are needed for airgap environments
@@ -45,7 +45,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git init /var/lib/rancher-data/local-catalogs/v2/rancher-rke2-charts/675f1b63a0a83905972dcab2794479ed599a6f41b86cd6193d69472d0fa889c9 && \
     cd /var/lib/rancher-data/local-catalogs/v2/rancher-rke2-charts/675f1b63a0a83905972dcab2794479ed599a6f41b86cd6193d69472d0fa889c9 && \
     git remote add origin https://github.com/rancher/rke2-charts && \
-    git fetch --depth 1 origin 3fd7a82f5fc0ad025a2402dd3861d3d0562ca653 && \
+    git fetch --depth 1 origin 9c1cc31fd952b42060efe62b286360e30af71d51 && \
     git update-ref --no-deref HEAD FETCH_HEAD
 
 # Consolidated charts image
@@ -64,9 +64,9 @@ RUN chmod +x /usr/local/bin/copy-charts
 ENV CHART_BRANCH=staging \
     PARTNER_BRANCH=main \
     RKE2_BRANCH=main \
-    CHART_COMMIT=552ebfc2806d9479dcf8bd371846d70447b5675a \
+    CHART_COMMIT=0ab41f2cbc33453f56b9797ba1f39eab867980cc \
     PARTNER_COMMIT=40385a0966f0a6c4055332991b73751d62e443c3 \
-    RKE2_COMMIT=3fd7a82f5fc0ad025a2402dd3861d3d0562ca653
+    RKE2_COMMIT=9c1cc31fd952b42060efe62b286360e30af71d51
 
 # Runtime labels - provided by build
 ARG VERSION
@@ -89,11 +89,11 @@ LABEL "io.artifacthub.package.logo-url"="https://raw.githubusercontent.com/ranch
     "io.rancher.build-type"=dev \
     "io.rancher.rancher-minor"=2.16 \
     "io.rancher.charts.branch"=staging \
-    "io.rancher.charts.commit"=552ebfc2806d9479dcf8bd371846d70447b5675a \
+    "io.rancher.charts.commit"=0ab41f2cbc33453f56b9797ba1f39eab867980cc \
     "io.rancher.partner.branch"=main \
     "io.rancher.partner.commit"=40385a0966f0a6c4055332991b73751d62e443c3 \
     "io.rancher.rke2.branch"=main \
-    "io.rancher.rke2.commit"=3fd7a82f5fc0ad025a2402dd3861d3d0562ca653
+    "io.rancher.rke2.commit"=9c1cc31fd952b42060efe62b286360e30af71d51
 
 # Default command: copy charts to shared volume
 CMD ["/usr/local/bin/copy-charts"]
