@@ -16,9 +16,9 @@ chart-versions:
                     commit: 9c1cc31fd952b42060efe62b286360e30af71d51
             dev:
                 charts:
-                    fetched-at: 2026-11-24T13:57:29.597862539Z
+                    fetched-at: 2026-11-24T14:26:19.436985283Z
                     branch: staging
-                    commit: 179fc2f223ccffde27de59605cf1139c8629d00b
+                    commit: 10ea6933c6c3acf40434614adb1e1e04360a8c95
                 partner:
                     fetched-at: 2026-11-24T07:03:52.322249028Z
                     branch: main
@@ -34,5 +34,5 @@ copy-script-hash: 37114795bbe1faac92fcc3219079a402f3a665e0494d27b6f6c40cc0527da0
 template-hashes:
     prod-template: 9e89c4428246e789a7a15cee03edea4d167676f17d05a978092479e590e2b43b
     dev-template: b10db01b4a40e2ce569fdf7a4d771f389458a7e9995f8c89a586dca29e40f48a
-generated-at: 2026-11-24T13:57:30.203945371Z
+generated-at: 2026-11-24T14:26:19.891962265Z
 generator-version: v0.1.0
