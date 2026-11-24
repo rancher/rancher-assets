@@ -20,7 +20,7 @@ RUN mkdir -p /var/lib/rancher-data/local-catalogs/v2 && \
     git init /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721 && \
     cd /var/lib/rancher-data/local-catalogs/v2/rancher-charts/4b40cac650031b74776e87c1a726b0484d0877c3ec137da0872547ff9b73a721 && \
     git remote add origin https://github.com/rancher/charts && \
-    git fetch --depth 1 origin 4430efda729e327d18d823e7e45683808474521d && \
+    git fetch --depth 1 origin 552ebfc2806d9479dcf8bd371846d70447b5675a && \
     git update-ref --no-deref HEAD FETCH_HEAD
 
 # rancher/charts may no longer contain charts tarballs under `assets/`, but they are needed for airgap environments
@@ -64,7 +64,7 @@ RUN chmod +x /usr/local/bin/copy-charts
 ENV CHART_BRANCH=staging \
     PARTNER_BRANCH=main \
     RKE2_BRANCH=main \
-    CHART_COMMIT=4430efda729e327d18d823e7e45683808474521d \
+    CHART_COMMIT=552ebfc2806d9479dcf8bd371846d70447b5675a \
     PARTNER_COMMIT=40385a0966f0a6c4055332991b73751d62e443c3 \
     RKE2_COMMIT=3fd7a82f5fc0ad025a2402dd3861d3d0562ca653
 
@@ -89,7 +89,7 @@ LABEL "io.artifacthub.package.logo-url"="https://raw.githubusercontent.com/ranch
     "io.rancher.build-type"=dev \
     "io.rancher.rancher-minor"=2.16 \
     "io.rancher.charts.branch"=staging \
-    "io.rancher.charts.commit"=4430efda729e327d18d823e7e45683808474521d \
+    "io.rancher.charts.commit"=552ebfc2806d9479dcf8bd371846d70447b5675a \
     "io.rancher.partner.branch"=main \
     "io.rancher.partner.commit"=40385a0966f0a6c4055332991b73751d62e443c3 \
     "io.rancher.rke2.branch"=main \
