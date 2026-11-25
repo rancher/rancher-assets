@@ -61,7 +61,7 @@ COPY package/copy-charts.sh /usr/local/bin/copy-charts
 RUN chmod +x /usr/local/bin/copy-charts
 
 # Store branch and commit metadata as ENV for runtime access
-ENV CHART_BRANCH=production \
+ENV CHART_BRANCH=release-v2.16 \
     PARTNER_BRANCH=main \
     RKE2_BRANCH=main \
     CHART_COMMIT=a45766afc150ea07f0d057a8920f1bb0a30fd839 \
@@ -88,7 +88,7 @@ LABEL "io.artifacthub.package.logo-url"="https://raw.githubusercontent.com/ranch
     "io.rancher.build-url"=${BUILD_URL} \
     "io.rancher.build-type"=prod \
     "io.rancher.rancher-minor"=2.16 \
-    "io.rancher.charts.branch"=production \
+    "io.rancher.charts.branch"=release-v2.16 \
     "io.rancher.charts.commit"=a45766afc150ea07f0d057a8920f1bb0a30fd839 \
     "io.rancher.partner.branch"=main \
     "io.rancher.partner.commit"=0e31555c59e3b16a1c8b600b7f9b63ecd9139cc0 \

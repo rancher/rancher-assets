@@ -12,7 +12,7 @@ chart-versions:
   "2.16":
     rancher-branch: release/v2.16
     prod:
-      charts-branch: production
+      charts-branch: release-v2.16
       partner-branch: main
       rke2-branch: main
     dev:
