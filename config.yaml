@@ -16,7 +16,7 @@ chart-versions:
       partner-branch: main
       rke2-branch: main
     dev:
-      charts-branch: staging
+      charts-branch: dev-v2.16
       partner-branch: main
       rke2-branch: main
 
