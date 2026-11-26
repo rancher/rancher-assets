@@ -2,8 +2,9 @@
 # Updates the chart pins of rancher/rancher (build.yaml and package/Dockerfile) to the newest staged version of each
 # chart for the Rancher line of the image, read from the index.yaml of the charts commit that is inside the image.
 #
-# It only applies to a dev image (tag ending in -dev) and to a branch whose chartDefaultBranch is staging, the new
-# catalog. For anything else it does nothing and exits with 3.
+# It only applies to a dev image (tag ending in -dev) and to a branch whose chartDefaultBranch is on the new catalog:
+# staging, or dev-v2.16, which is a copy of it that the git mirror serves for 2.16. For anything else it does nothing
+# and exits with 3.
 #
 # "Newest" is the first entry of the chart in the index whose major is the one of the line: the index is ordered by
 # cargueiro, newest first, across every Rancher line, so the first entry can be a version of the next line (the 2.17
@@ -54,14 +55,19 @@ if ! command -v yq >/dev/null 2>&1; then
   exit 1
 fi
 
-# Guard: only dev images of a branch on the staging catalog
+# Guard: only dev images of a branch on the new catalog
 if [[ "$TAG" != *-dev ]]; then
   log "  ℹ️  $TAG is not a dev image: the chart pins are not changed"
   exit 3
 fi
 CHART_BRANCH=$(yq eval '.chartDefaultBranch' "$BUILD_YAML")
-if [ "$CHART_BRANCH" != "staging" ]; then
-  log "  ℹ️  chartDefaultBranch is '$CHART_BRANCH', not staging: the chart pins are not changed"
+NEW_CATALOG_BRANCHES=(staging dev-v2.16)
+ON_NEW_CATALOG=false
+for branch in "${NEW_CATALOG_BRANCHES[@]}"; do
+  if [ "$CHART_BRANCH" = "$branch" ]; then ON_NEW_CATALOG=true; fi
+done
+if [ "$ON_NEW_CATALOG" != true ]; then
+  log "  ℹ️  chartDefaultBranch is '$CHART_BRANCH', not one of ${NEW_CATALOG_BRANCHES[*]}: the chart pins are not changed"
   exit 3
 fi
 

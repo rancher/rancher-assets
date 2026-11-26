@@ -67,13 +67,21 @@ check "second run: nothing to update, exit 2" 2 "$EXIT"
 fresh; run v2.17-20261201T1000Z-dev
 check "2.17 dev image: webhook is the 112 entry" "112.0.0+up0.13.0-rc.11" "$(val webhookVersion)"
 
-# 6. the guard: only dev images of a branch on the staging catalog
+# 6. the guard: only dev images of a branch on the new catalog, which is staging and dev-v2.16, its copy
 fresh; run v2.16-20261120T1935Z
 check "not a dev image: exit 3" 3 "$EXIT"
 check "not a dev image: pins untouched" "111.0.1+up0.12.1-rc.21" "$(val webhookVersion)"
-fresh; yq eval -i '.chartDefaultBranch = "dev-v2.16"' "$WORK/build.yaml"; run v2.16-20261120T1935Z-dev
+fresh; yq eval -i '.chartDefaultBranch = "dev-v2.15"' "$WORK/build.yaml"; run v2.16-20261120T1935Z-dev
 check "branch on the old system: exit 3" 3 "$EXIT"
 check "branch on the old system: pins untouched" "111.0.1+up0.12.1-rc.21" "$(val webhookVersion)"
+fresh; yq eval -i '.chartDefaultBranch = "release-v2.16"' "$WORK/build.yaml"; run v2.16-20261120T1935Z-dev
+check "the production copy is not a dev branch: exit 3" 3 "$EXIT"
+check "the production copy: pins untouched" "111.0.1+up0.12.1-rc.21" "$(val webhookVersion)"
+fresh; yq eval -i '.chartDefaultBranch = "dev-v2.16"' "$WORK/build.yaml"; run v2.16-20261120T1935Z-dev
+check "dev-v2.16, the copy of staging: exit 0" 0 "$EXIT"
+check "dev-v2.16: the webhook is the first 111 entry, as on staging" "111.0.1+up0.12.1-rc.22" "$(val webhookVersion)"
+check "dev-v2.16: the branch is not changed" "dev-v2.16" "$(val chartDefaultBranch)"
+check "dev-v2.16: the report says what moved" 1 "$(grep -c 'webhookVersion.*111.0.1+up0.12.1-rc.21.*111.0.1+up0.12.1-rc.22' "$REPORT")"
 
 # 7. a branch that already has the pins of an earlier update (the PR is updated, not created): nothing is changed, and
 #    the report still says what moved against the base branch, which is what the PR is about
