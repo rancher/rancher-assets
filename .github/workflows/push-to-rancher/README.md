@@ -54,7 +54,7 @@ What it costs: every update is a push to the branch, so the checks of rancher/ra
 
 `update-pins.sh` sets the pins of rancher/rancher to the newest staged version of each chart for the Rancher line of the image, in a second commit of the same PR, so that the pins do not have to be changed by hand after the image.
 
-**When it applies.** Only when both are true: the tag ends in `-dev`, and the `build.yaml` of the target branch has `chartDefaultBranch: staging`. Anything else (a production image, a line still on the old catalog system) exits with 3 and the PR has the image commit only.
+**When it applies.** Only when both are true: the tag ends in `-dev`, and the `build.yaml` of the target branch has `chartDefaultBranch` set to `staging` or to `dev-v2.16`, the copy of it that the git mirror serves for 2.16. Anything else (a production image, a line still on the old catalog system) exits with 3 and the PR has the image commit only.
 
 **Which version.** The charts commit inside the image is read from `lock.yaml` of the tag (`chart-versions.<minor>.upstream-refs.dev.charts.commit`), and its `index.yaml` from `rancher/charts` at that commit. For each pin, the version is the **first entry of the chart whose major is the one of the line**. The index is ordered by cargueiro, newest first, across every Rancher line, so the first entry of a chart can be a version of the next minor, and the major is what tells them apart. Chart versions are `1XY.Z.W+upA.B.C` and `1XY` follows the Rancher minor: 2.10 is 105, 2.16 is 111, 2.17 is 112 (`versions.majors` in `rules.yaml` of rancher/cargueiro), so the script uses `95 + minor`. Semver is not used: it ignores everything after the `+`, so two release candidates of the same upstream version compare equal.
 
